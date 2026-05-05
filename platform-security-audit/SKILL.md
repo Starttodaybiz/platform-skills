@@ -88,8 +88,8 @@ in-scope app is audited against the C2C baseline.
 | `client-dashboard` | `Client-Dashboard` | client.starttoday.biz | App Router | Largest user-facing surface |
 | `compliance-user` | `compliance-User` | compliance.starttoday.biz | Pages Router | |
 | `client-ep` | `Client-EP` | starttoday.estate | App Router | Client-facing estate planning |
-| `hr-repo` | `hr` | hr.starttoday.biz | App Router | Client HR |
-| `prohr-repo` | (verify) | prohr.starttoday.biz | (verify) | Provider HR — repo location to confirm |
+| `hr-repo` | `HR` | hr.starttoday.biz | App Router | Client HR (per Deployment Manifest in `compliance-platform-development`) |
+| `prohr-repo` | `ProHR` | prohr.starttoday.biz | App Router | Provider HR (per Deployment Manifest in `compliance-platform-development`) |
 | `employee-repo` | `employee` | employee.starttoday.biz | App Router | Mobile-first ESS |
 | `bank-repo` | `Bank` | bank.starttoday.biz | App Router | Client-facing banking |
 | `lender-repo` | `Lender` | lender.starttoday.biz | App Router | Bank/lender-facing |
