@@ -1,0 +1,145 @@
+const {
+  P, H1, H2, H3, PB, Bullet, BulletBold, Callout, MetricsTable, ColTable,
+} = require("./build-thesis.js");
+
+// ── CHAPTER 3: THE PORTAL EXPANSION ─────────────────────────────────────────
+const ch3 = [
+  PB(),
+  H1("Chapter 3 — The Portal Expansion (March 2026 → May 2026)"),
+  P("Seven portals shipped to production between v1.0 and v2.0. Each unlocks a new revenue surface and creates new engagement loops with the underlying compliance data."),
+  H2("3.1  Click to Close™ (c2c.starttoday.biz)"),
+  P("Click to Close™ is the platform's M&A and transaction data room. It is the most strategically distinctive of the new portals because it monetizes via success fee — a percentage of deal value at close — rather than SaaS subscription. This pricing model is intentional: the volume of small-business transactions in the United States runs to roughly 250,000 per year in the Main Street segment alone, with median deal sizes of $300,000 to $5 million and average close cycles of 90 to 270 days. Each transaction generates substantial professional services spend and substantial verification needs, both of which the platform addresses. By taking a success fee, Start Today aligns its incentives with deal closure rather than seat counts."),
+  P("The C2C portal unifies what is normally fragmented across email threads, encrypted-PDF deal rooms, and the buyer-seller-attorney-banker-accountant tetrad. Buyers and sellers each get scoped views into a shared transaction. Diligence requests move through a structured workflow rather than email. Deal narratives, transaction memoranda, and closing checklists live in versioned tables. STVerify™ certifications are integrated throughout — every party verification, every entity verification, every financial certification — generating per-deal STVerify revenue alongside the success fee."),
+  Callout("C2C revenue model", [
+    "Success fee: percentage of deal value at close, tiered by deal size — exact percentages locked in platform_ontology under C2C_PRICING_MODEL.",
+    "Secondary revenue: STVerify API calls throughout the deal lifecycle (Verify, Score, Monitor, Legal Snapshot, Certified Calculation).",
+    "Post-close ARR: monitoring subscription that continues after deal close for the surviving entity, providing covenant tracking and ongoing compliance oversight.",
+    "No SaaS subscription, no seat counts, no per-deal flat fee. The platform earns when the deal closes.",
+  ]),
+  H2("3.2  Banking & Treasury Suite (lender.starttoday.biz)"),
+  P("The Lender portal serves banks, credit unions, and CDCs originating commercial loans, with particular emphasis on SBA 504 and 7(a) lending. The platform consolidates the loan packaging workflow — eligibility checks against 50 mapped SBA programs, credit memo generation, E-Tran submission staging, covenant definition, post-close monitoring, and lender response actions on borrower documentation submissions. The CDC view supports the participating Certified Development Company workflow specific to 504 transactions. The portal currently runs in demonstration mode for charter cohort lenders — Midwest Business Bank and Rockford Local Development Corporation are the two demonstration lender seats."),
+  P("The revenue model here is two-sided. Lenders pay subscription for the platform and per-loan fees for processing services. Borrowers — clients of Start Today — pay nothing additional; the platform earns by providing the originating lender with a structured, verified application packet that reduces the lender's own packaging cost from its typical $5,000–$15,000 per 504 loan down toward $1,000–$2,000 of marginal effort, with the verification heavy lifting done by the platform. This is the platform's first true two-sided marketplace: clients on one side, originating lenders on the other, both paying."),
+  H2("3.3  Chamber Portal (chamber.starttoday.biz)"),
+  P("The Chamber Portal turns chambers of commerce into Start Today distribution channels. The Greater Rockford Chamber of Commerce (GRCC, 106 entries, EIN 36-1695170) is the launch partner. Chambers receive a co-branded version of the platform that their members can join at a discount. The platform receives organized distribution into a vetted small-business community. The chamber receives a value-add member benefit that does not require chamber staff to operate it."),
+  P("The Regional Intelligence Map V6 is the chamber portal's signature feature: an 8+ layer geospatial overlay showing Opportunity Zones, HUBZones, NMTC tracts, Illinois Enterprise Zones, TIF districts, brownfields, Superfund sites, RCRA sites, and historic districts within the chamber's service area. CARL Lens runs on top of this map. A chamber member can ask CARL 'show me the brownfield sites within a half-mile of my building' or 'which of our members are inside a federal historic district' — and the map dims and illuminates accordingly. The map currently shows 44 GRCC members inside National Register Historic Districts, eligible for 20% federal plus 25% Illinois Historic Tax Credit."),
+  H2("3.4  Accounting & Tax Suite (accounting.starttoday.biz)"),
+  P("In active development. The Accounting Suite extends the platform into bookkeeping, AR/AP, financial statement generation, 1099 preparation, and tax return support. It integrates with QuickBooks Online, Xero, and Sage as data sources. Color tokens locked at #0E7490 / #ECFEFF / #A5F3FC. The suite is positioned to capture the bookkeeping spend that small businesses currently route through their CPA's office or through Bench/Pilot/Bookkeeper.com — an estimated $500–$2,000/month per business — while keeping the financial data inside the platform where it informs Start Score, deal valuations, and loan applications."),
+  H2("3.5  Property Suite™ (property.starttoday.biz)"),
+  P("Property Suite manages real estate holdings, leases, properties, projects, and the compliance overlays specific to real property: zoning, code compliance, inspections, property taxes, building licenses, and tenant obligations. Color tokens locked at #166534 / #F0FDF4 / #BBF7D0. This is also where the Construction Project module lives, tracking project compliance registers, inspections, vendors, and risk requirements."),
+  H2("3.6  Employee Self-Service Portal (employee.starttoday.biz)"),
+  P("The Employee portal is mobile-first and uses 30-day signed token links rather than passwords. New hires receive a tokenized invite link via the send-employee-invite edge function, complete I-9 documentation, sign policy acknowledgments, complete onboarding training, and submit benefits enrollment — all without creating an account. This radically reduces onboarding friction (no password reset emails, no abandoned account creation) and is particularly suited to hourly and seasonal workforces. SESSION_SECRET is locked. The portal feeds directly into the HR portal's Employee table, the Policy_Acknowledgements ledger, and the Training_Records pipeline."),
+  H2("3.7  Provider HR Portal (prohr.starttoday.biz)"),
+  P("The Provider HR Portal is the multi-client workspace for HR consulting firms and PEOs. A single HR provider can switch contexts across all of their client organizations from a single login, batch-process compliance issues across the portfolio, and serve as the front-line responder to HR Compliance Issues raised by CARL HR™ across their client base. Provider firms pay per-seat, with revenue share to Start Today on any compliance issue resolved through Start Today professional services."),
+];
+
+// ── CHAPTER 4: SOC 2 READINESS ──────────────────────────────────────────────
+const ch4 = [
+  PB(),
+  H1("Chapter 4 — SOC 2 Readiness Milestone"),
+  P("The single most strategically significant accomplishment between v1.0 and v2.0 is the completion of a comprehensive SOC 2 readiness program. SOC 2 attestation is the de facto requirement for selling to enterprise customers, banks, healthcare organizations, and any regulated industry. Without SOC 2, the platform's enterprise sales motion stops at the procurement gate. With SOC 2 Type I — the readiness checkpoint — the platform can credibly engage that procurement gate. With SOC 2 Type II — the operating-effectiveness checkpoint, achievable 6 to 12 months after Type I — the platform converts that engagement into closed business."),
+  H2("4.1  What was completed"),
+  P("Across two intensive build sessions in late April and early May 2026, the platform completed the following:"),
+  BulletBold("Database security remediation", "All 227 user-domain tables in production now have Row Level Security enabled, with 0 tables remaining in 'RLS off' state. All 71 user functions with mutable search_path were hardened. All 183 dangerous public-ALL policies were reviewed and replaced. 9 Tier-1 sensitive tables (containing password hashes, TOTP secrets, MFA backup codes, password reset tokens, registry secrets, SSO tokens) are locked to service_role-only access with grants explicitly revoked from anon and authenticated. The same remediation was applied to the demo database in parallel."),
+  BulletBold("Per-route session guards", "All 11 real authentication gaps across the six application repositories were closed. Specific routes affected: Platform Admin roadmap and transaction catalog, Attorney Dashboard CARL/workflow/messages, Client Dashboard gamification/score-report/score-history/portfolio-trend/q endpoints. Each now requires a valid session before responding."),
+  BulletBold("PII cleanup", "Hardcoded references to 'MJS Law' and 'Jason Reynolds, Peter Provenzano' across the admin-user, client-ep, and compliance-user repositories were replaced with neutral placeholders. The Platform Admin repo now sources its support email through a centralized lib/config/support.js with environment-variable override (NEXT_PUBLIC_SUPPORT_EMAIL), making future PII removal a one-line change."),
+  BulletBold("Automated security audit", "Daily cron job platform-security-audit-daily runs at 9:00 UTC, executing fn_run_security_diagnostics() and persisting findings to platform_security_audit_runs and platform_security_findings. Findings are severity-classified, deltas-versus-prior-run are computed, and regressions trigger alerts via the bot_runs notification channel. The Platform Admin /admin/security-audit dashboard surfaces the 7-day, 30-day, and 90-day trend lines and supports manual run triggers."),
+  BulletBold("SOC 2 evidence collection", "The platform's existing SOC 2 framework (soc2_controls_catalog with 36 controls covering CC1.1 through CC9.2, plus C1.1-C1.2 and A1.1-A1.3) is now wired to an automated evidence collection function fn_soc2_evidence_collect() that returns per-control evidence snapshots. The first manual run produced 13 PASS, 2 PARTIAL (CC4.2 due to current MFA finding, CC6.2 due to 6% MFA enrollment), and 0 FAIL across 15 instrumented controls. Daily collection runs at 9:15 UTC."),
+  BulletBold("SOC 2 documentation suite", "Four authoritative documents were generated: the Policy Bundle (7 policies plus 5 appendices including a 10-entry Risk Register and the RACI), the System Description (full DC1-DC9 narrative with 23-app inventory and 8 CUECs), the Ready Package (Management Assertion, Readiness Checklist with 40 line items across A.1-D.5, Auditor Engagement Brief, Customer Trust Statement), and the Initial Security Audit baseline."),
+  H2("4.2  What this unlocks"),
+  P("The SOC 2 readiness milestone unlocks the platform's enterprise and regulated-industry sales motion. Specifically:"),
+  BulletBold("Banking sales", "The Banking & Treasury Suite (lender.starttoday.biz) requires SOC 2 to be considered by any bank's vendor risk team. Without it, even the demonstration lender seats stay in pilot. With Type I, the platform can be considered as a vendor; with Type II, it can be contracted."),
+  BulletBold("Healthcare adjacencies", "Healthcare entities that need EPLI and OSHA compliance — a substantial vertical for the HR portal — will not contract with vendors who do not maintain SOC 2 due to interaction with the HIPAA risk surface. SOC 2 readiness allows the platform to credibly enter healthcare sales."),
+  BulletBold("Enterprise multi-entity clients", "Holding companies and PE portfolios with 10+ entities are the highest-LTV client cohort the platform addresses. They run mature procurement and require SOC 2 at the master service agreement level."),
+  BulletBold("Chamber of Commerce expansion", "Chambers that have any government-funded program (SBA Resource Partners, state economic development partners, federal grant subrecipients) will require their members' compliance vendors to demonstrate SOC 2. Several mid-sized chambers in the Start Today expansion pipeline have indicated this is a gating requirement."),
+  H2("4.3  The road from Type I to Type II"),
+  P("Type I attestation tests whether controls are designed appropriately and were operating as of a point in time. Type II tests whether controls operated effectively across a window of 3, 6, or 12 months. The platform is positioned for Type I now, given the readiness package, the automated evidence collection, and the daily security audit. Type II requires running the controls — and capturing the evidence of them running — across the chosen attestation window. The automated evidence collection cron is the mechanism that produces this. Each daily run is one row of evidence; over a 6-month window, that is approximately 180 rows of dated, hash-stamped evidence per control. By December 2026, with the automated evidence collection running continuously since May, the platform can pursue a Type II audit window of 6 months — reaching attestation by Q1 2027 at the latest."),
+];
+
+// ── CHAPTER 5: SCORING & DATA STATE MACHINE ─────────────────────────────────
+const ch5 = [
+  PB(),
+  H1("Chapter 5 — Start Score™ and the Data State Machine™"),
+  H2("5.1  The eleven pillars, restated and updated"),
+  P("Start Score™ remains the platform's signature output metric. The eleven pillars and their current weights are:"),
+  ColTable(
+    ["Pillar", "Weight", "Source data"],
+    [
+      ["Entity Compliance", "15%", "Entities, Entity_Registrations, Annual_Report_Filings, BOI_Filings, DBA_filings, UCC_Filings"],
+      ["Tax Compliance", "12%", "State_Tax_Filing_Obligations, Estate_and_Gift_Tax_Filings, IRS Federal mappings"],
+      ["HR Compliance", "12%", "Employee_I9, HR_Compliance_Issues, EEO_Job_Categories, Employee_certifications, Training_Records"],
+      ["Insurance Coverage", "10%", "Insurance_policies, Policy_coverages, Life_and_KeyPerson_Insurance, AML_KYC_Screening_Results"],
+      ["Banking & Capital", "10%", "Loans, Loan_covenants_and_conditions, SBA_Loans, Liens_and_Collateral, Loan_Compliance_Obligations"],
+      ["Legal Posture", "10%", "Engagements, Documents (legal class), Estate_Documents, Reviews_and_Assessments"],
+      ["Estate & Succession", "8%", "Estate_Plans, Estate_Plan_Versions, Estate_Beneficiaries, Business_Succession_Plans"],
+      ["Financial Data Quality", "8%", "Financial_Statements, Compensation_History, Asset_Depreciation_Schedule, data_state_machine quality multipliers"],
+      ["Property & Real Estate", "5%", "Properties, Property_Taxes, Real_Estate_Transactions, Maintenance_Logs_By_Type"],
+      ["Reporting & Audit Readiness", "5%", "Document completeness, version chains, KYC_Profiles, soc2_policy_versions"],
+      ["Strategic Planning", "5%", "Pipeline, integration_plans, Project_Compliance_Register, Diligence_Requests"],
+    ],
+    [0.32, 0.10, 0.58]
+  ),
+  H2("5.2  The Data State Machine™"),
+  P("The single most important architectural concept introduced since v1.0 is the Data State Machine™. Every datapoint in the platform — every filing, every license, every covenant, every employee record, every property line item — moves through a defined verification lifecycle:"),
+  BulletBold("MISSING (0.0× quality multiplier)", "The datapoint should exist but does not. Score is materially penalized."),
+  BulletBold("DRAFT (0.3×)", "Datapoint entered but unfinished. Counts toward score at 30% weight."),
+  BulletBold("SELF_REPORTED (0.5×)", "Client has filled it in but no verification has occurred. Half weight."),
+  BulletBold("SYSTEM_PULLED (0.7×)", "Platform has retrieved the datapoint from an authoritative source (SOS, IRS, court records). 70% weight."),
+  BulletBold("PENDING_REVIEW (0.8×)", "Datapoint is queued for human review by ST staff or a marketplace professional. 80% weight."),
+  BulletBold("APPROVED (0.9×)", "Reviewed and approved by an internal staffer or attached professional. 90% weight."),
+  BulletBold("STVERIFIED™ (1.0×)", "Independently verified through STVerify and stamped with a Certified Calculation™ or Legal Snapshot™. Full weight."),
+  P("This state machine creates four cascading platform behaviors. First, the score itself rewards verification — clients with comprehensive but unverified data score lower than clients with verified data, creating direct economic pull toward STVerify. Second, gamification quests tied to score improvement naturally surface 'verify these N items to gain X points.' Third, professional service marketplace offers can be tied to specific transition arcs ('we will move 12 of your DRAFT items to STVERIFIED for a flat fee'). Fourth, certain pricing tiers gate features behind a minimum verified-data threshold, creating direct upsell pressure."),
+  Callout("Why this matters more than score", [
+    "The eleven-pillar score tells you what your compliance posture is.",
+    "The data state machine tells you how trustworthy that score is.",
+    "Together, they make the platform's output legally and commercially relevant in ways that a self-reported score cannot be.",
+    "STVERIFIED data is what underwrites a loan, supports a deal close, or attests SOC 2 evidence — not raw self-reported data.",
+  ]),
+  H2("5.3  CARL™ and the score"),
+  P("CARL Compliance™ generates the daily morning briefing for every active organization: a personalized summary of which Start Score components moved, what new compliance items came due, what verification opportunities exist, and what action items are highest-leverage to address today. The morning briefing runs on a cron schedule (carl-morning-briefing-v3 in run_all mode, processing all 76 orgs in batches of 5). Briefings are delivered through the client portal's notification surface and, for the highest-tier subscriptions, via email and SMS."),
+];
+
+// ── CHAPTER 6: REVENUE MODEL ────────────────────────────────────────────────
+const ch6 = [
+  PB(),
+  H1("Chapter 6 — Revenue Model"),
+  P("The v1.0 thesis described a four-tier subscription model with usage-based overages and professional services margins. This was the right model for a single-portal compliance product. The v2.0 platform is multi-portal, multi-revenue-stream, and the revenue model has correspondingly expanded. There are now eleven distinct revenue streams across five categories."),
+  H2("6.1  The five revenue categories"),
+  H3("Subscription Revenue"),
+  P("Recurring SaaS subscription, billed monthly or annually. Tiered: Starter, Growth, Professional, Bank/Enterprise. The largest single category by volume, but no longer the largest by total revenue."),
+  H3("Per-Transaction Revenue"),
+  P("Earned at moments of value creation. Includes: STVerify Certified Calculations ($10 standard / $25 bilateral), STVerify Legal Snapshots ($75/cert), STVerify Verify/Score/Monitor API call charges, document filing fees (BOI, annual report, DBA), and registered agent service fees."),
+  H3("Success-Fee Revenue"),
+  P("Earned at completion of large transactions. The C2C portal's success fee on closed deals is the canonical example. Tiered by deal value, capped at the upper end. Materially higher revenue per event than subscription, with intentionally aligned incentives."),
+  H3("Marketplace Take-Rate Revenue"),
+  P("Earned when a marketplace professional (attorney, CPA, broker, HR consultant) is engaged through the platform to deliver services to a client. The platform takes 12-15% of the engagement value. Network effect: as more clients are on the platform, more professionals join the marketplace; as more professionals are present, faster engagement match and higher take-rate volume."),
+  H3("Channel Revenue"),
+  P("Earned through partnerships. Insurance broker referrals (lead generation fees plus ongoing commission share), bank/lender partnership fees (per-loan packaging), chamber subscription revenue share (chambers receive a discount and a revenue split for member acquisition), CPA firm referral fees."),
+  H2("6.2  The eleven revenue streams"),
+  ColTable(
+    ["Stream", "Mechanism", "Estimated unit value"],
+    [
+      ["Client subscription", "Monthly/annual SaaS, 4 tiers", "$59 to $1,250 / month per org"],
+      ["Provider subscription", "Per-seat for attorneys, brokers, HR providers", "$99 to $399 / seat / month"],
+      ["STVerify Certified Calculations", "Per certification", "$10 standard / $25 bilateral"],
+      ["STVerify Legal Snapshots", "Per snapshot", "$75 / cert"],
+      ["STVerify API metered calls", "Per Verify/Score/Monitor call", "$0.50 to $5 per call"],
+      ["Document filing services", "Per filing (BOI, AR, DBA, etc.)", "$50 to $250 per filing"],
+      ["Registered agent service", "Per state per year", "$199 / state / year"],
+      ["C2C success fee", "Percentage of deal value at close", "Tiered % of $300K-$5M deals"],
+      ["Marketplace take-rate", "12-15% of professional engagement", "Variable, est. $500-$15K per engagement"],
+      ["Insurance referral / commission", "Lead fees plus ongoing commission share", "Variable, est. $200-$3,000 per placement"],
+      ["Lender packaging fees", "Per-loan SBA 504/7(a) packaging", "$500 to $2,500 per loan"],
+    ],
+    [0.30, 0.40, 0.30]
+  ),
+  H2("6.3  Three customer archetypes, updated"),
+  P("The v1.0 thesis sized three customer archetypes. The v2.0 sizing reflects the broader portal footprint and the added revenue surfaces:"),
+  H3("Archetype 1 — The Single-Entity Main Street Business"),
+  P("A 5–25 employee business operating out of one or two states. Subscribes to Growth tier ($299/month). Consumes 6-12 STVerify certifications per year ($100-$300 annually). Uses 1-2 marketplace professionals (attorney, accountant) annually with $3,000-$8,000 of professional services routed through the platform (12% take rate = $360-$960). Files BOI annually ($75) and 1-3 DBAs over a 3-year span. Annual platform revenue: roughly $4,500-$5,500."),
+  H3("Archetype 2 — The Multi-Entity Holding Structure"),
+  P("A 25-100 employee business with 3-12 entities, multi-state operations, and active SBA-backed financing. Subscribes to Professional tier ($899/month). Consumes 30-60 STVerify certifications per year. Routes $20,000-$50,000 of professional services through the marketplace. Active in C2C with 0-1 deals per year, success fees variable by deal closure. Active in lender portal for ongoing covenant monitoring. Annual platform revenue: roughly $25,000-$60,000."),
+  H3("Archetype 3 — The Enterprise / PE Portfolio"),
+  P("A holding company or PE platform with 10+ portfolio companies, multi-state operations across all portfolio entities, an internal compliance team that uses the platform as the system of record, and active deal-making (1-3 transactions per year per portfolio). Subscribes to Bank/Enterprise tier ($1,250+/month per master account). Consumes 200+ STVerify certifications per year. Routes substantial professional services and lender activity. Annual platform revenue per master account: roughly $75,000-$200,000+."),
+];
+
+module.exports = { ch3, ch4, ch5, ch6 };
