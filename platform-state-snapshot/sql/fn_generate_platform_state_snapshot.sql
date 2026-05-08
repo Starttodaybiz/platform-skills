@@ -1,0 +1,3 @@
+-- See migration: fn_generate_platform_state_snapshot_v4
+-- Authoritative source is the prod migration. This file is a backup.
+-- Last updated: 2026-05-07
