@@ -263,6 +263,56 @@ If count > 22: new RPC missing `SET search_path = public`, or new table missing 
 
 ---
 
+## Uploading Binary Files (.docx, .pdf, .pptx, .xlsx) to Supabase Buckets
+
+**Default rule: ask the user to drag-and-drop the files into the bucket via the Supabase dashboard. Do NOT try to inline binary content through tool calls.**
+
+This costs effectively zero tokens vs. potentially **hundreds of round-trips** to do it programmatically through Claude's tooling.
+
+### Why programmatic upload of binary files is bad
+
+Claude has no way to upload bytes directly to a Supabase bucket. Every workaround has a dealbreaker:
+
+- **`apply_migration` + hex/base64 staging**: Claude must paste the encoded bytes as a SQL string parameter. The `view` tool, used to read the encoded data from disk, silently truncates output around ~16 KB cumulative. A single 100 KB file requires ~30+ tool calls to chunk + stage + assemble + verify, and any silent truncation corrupts the payload undetected (size mismatch, SHA mismatch, or — worst — the upload "succeeds" with a malformed file).
+- **`deploy_edge_function` with embedded bytes**: same problem. The function source is passed as a string parameter; the encoded blob has to come from somewhere Claude can read cleanly, which loops back to the view-truncation issue.
+- **GitHub PAT-fetch from edge function**: works, but only if the repo is private (sensitive docs can't go in `Starttodaybiz/platform-skills` — that repo is **public**). And `api.github.com` is not in Claude's egress allowlist, so Claude can't create a private repo on demand.
+
+The pattern that **almost** works (chunked b64 staging table + uploader edge function) was built and proven on one ~14 KB file, but each ~3 KB chunk still costs one `apply_migration` round-trip. A 106 KB file = 48 chunks = 48 round-trips. Across nine files in May 2026, this approach was abandoned mid-staging in favor of dashboard upload — see the AR_Collection_Workflow + SOC 2 doc registry batch.
+
+### The right pattern
+
+1. **Claude generates the files locally** (`/mnt/user-data/outputs/`) using the docx/pdf/pptx/xlsx skills.
+2. **Claude calls `present_files`** so the user can download them in one click.
+3. **User drag-and-drops** into the target bucket via `https://supabase.com/dashboard/project/<ref>/storage/buckets/<bucket>`.
+4. **Claude verifies** the upload via SQL:
+   ```sql
+   SELECT name, metadata->>'size' AS size_bytes, created_at
+   FROM storage.objects
+   WHERE bucket_id = '<bucket>'
+   ORDER BY created_at DESC LIMIT 20;
+   ```
+5. **Claude registers** the now-uploaded files via the appropriate RPC (`fn_publish_internal_doc`, etc.).
+
+When presenting files for upload, give exact target filenames (case-sensitive, including extension) so the user doesn't rename and break the registration step.
+
+### Cleaning up duplicate/wrong-name uploads
+
+`storage.objects` is **delete-protected at the DB layer**:
+```
+ERROR: 42501: Direct deletion from storage tables is not allowed.
+       Use the Storage API instead.
+```
+Have the user delete via dashboard, or call `storage.delete_object` from an edge function with service_role.
+
+### When programmatic upload IS appropriate
+
+- Files **already in storage** that need to be moved/copied between buckets — service_role edge function with `storage.copy()` or `download()` + `upload()`.
+- Files generated **inside an edge function** (e.g., a server-side PDF render) — the function already has the bytes; just call `.upload()`.
+- **Text** files (.md, .json, .sql) under ~30 KB — these can go through `apply_migration` cleanly because there's no encoding step that introduces silent truncation risk.
+
+The "ask the user to drop files in the bucket" rule applies specifically to **binary docs Claude generates locally and needs to land in a bucket**. Don't burn tokens trying to be clever about it.
+
+
 ## See Also
 
 - `platform-page-audit` — QA sweep methodology, login fixes, write-back test scripts
