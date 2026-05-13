@@ -1,0 +1,21 @@
+{
+  "_comment": "Drop this file at the repo root as .score-drift-allowlist.json to suppress legitimate references. Document every entry with a sibling _why_ field.",
+
+  "allowed_strings": [
+    "sba_loans"
+  ],
+
+  "_why_allowed_strings": {
+    "sba_loans": "Used as a data key for the Loans table (sba_loans, sba504_loans). Bank and lender repos legitimately reference this — it's the SBA loan record type, not the deactivated v1.0 pillar. See: lender/pages/api/lender.js, Bank/pages/index.jsx."
+  },
+
+  "allowed_paths": [
+    "pages/api/index-overview.js",
+    "components/AdminPanel.jsx"
+  ],
+
+  "_why_allowed_paths": {
+    "pages/api/index-overview.js": "Bank app — returns Loans table rows including sba_loans field. Data layer, not scoring.",
+    "components/AdminPanel.jsx": "Platform-Admin KB editor — uses entity_compliance, etc. as knowledge-domain slugs, not scoring pillar keys. Separate taxonomy."
+  }
+}
