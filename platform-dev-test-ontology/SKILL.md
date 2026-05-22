@@ -373,6 +373,17 @@ Brokerage_Agents.credentials: TEXT[] array — use `credentials && ARRAY['ABV','
 ```
 
 ### Demo Footprint — SCENE_7_BROKERAGE (env tbihmlnqpwdeiethgwaf)
+
+**SEAT LOCATION (locked):** All C2C demo seats live in **PROD** Supabase
+(`ptgtliwllimkswtajcmy`), NOT the demo Supabase (`tbihmlnqpwdeiethgwaf`).
+C2C authenticates against PROD via `verify_admin_password` RPC — so
+broker seats (`demo.mna@`, `demo.mna.assoc@`) must exist as `auth.users`
+rows in PROD, with matching `Users.Email`/`Users.Auth_id` rows so the
+login route can attach `org_id` to the JWT. Easy regression: seeding
+ONLY demo Supabase fails login on c2c.starttoday.biz with "Invalid
+credentials." Demo Supabase still hosts the data for the other apps
+(hr, lender, etc.) but C2C is PROD-only.
+
 - Brokerage: Midwest M&A Partners, LLC · IL, EIN 88-3392041 · `b7000000-…-001`
 - Brokerage org: `d7000000-0000-0000-0000-000000000007`
 - Agent A (principal, demo.mna@): Eleanor Kessler · credentials [CBA, CM&AA, M&AMI]
