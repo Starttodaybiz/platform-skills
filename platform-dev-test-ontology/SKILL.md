@@ -400,3 +400,125 @@ credentials." Demo Supabase still hosts the data for the other apps
 |-----|---------------|-------------|------|
 | c2c.starttoday.biz | prj_LDUU472KXAlw4B0IHNW0d65S4fUO | Starttodaybiz/C2C | Brokerage Tier (Sprint 7) |
 
+
+---
+
+## Sprint 7.2 — Start Today Certified Valuation™ PDF generator
+
+### What shipped
+| Surface | Route | Status |
+|---------|-------|--------|
+| Cert PDF document | `components/c2c/StcvCertPdfDocument.jsx` | ✅ |
+| PDF render route (PUBLIC) | `GET /api/c2c/brokerage/valuations/[id]/pdf` | ✅ |
+| Certify response enrichment | `pdf_url` added to certify route response | ✅ |
+| Middleware exception | regex match `^/api/c2c/brokerage/valuations/[^/]+/pdf$` GET only | ✅ |
+| Download UI affordance | "⬇ Download cert PDF" + "📋 Copy verify URL" in ValuationDrawer certified state | ✅ |
+
+### Route mechanics
+- `runtime = 'nodejs'` (react-pdf needs Node, not Edge)
+- Param `[id]` accepts UUID OR cert_number (STCV-YY-NNNNN); UUID-regex check picks the right column
+- Joins `Brokerage` (issuing firm) + `Brokerage_Agents` (credentials, signature line)
+- Only returns content for `certified=true` rows (404 otherwise)
+- Cache-Control: `public, max-age=300`
+- Mirrors `CertPdfDocument.jsx` design vocabulary — corner ornaments, DM Serif Display + DM Sans, navy + emerald palette, paper-stock background
+- New `StcvSeal()` (Certified Valuation seal) and `ValuationRangeBar()` (low/mid/high visual)
+
+### Test cases — TC-026 to TC-028
+| TC | What | Assertion |
+|----|------|-----------|
+| TC-026 | PDF by UUID | `GET /api/c2c/brokerage/valuations/{uuid}/pdf` → 200 application/pdf |
+| TC-027 | PDF by cert_number | `GET /api/c2c/brokerage/valuations/STCV-26-04891/pdf` → 200 application/pdf |
+| TC-028 | PDF on uncertified draft | `GET .../{draft_uuid}/pdf` → 404 `cert_not_found` |
+
+---
+
+## Sprint 7.3 — Marketplace surface for businesses-for-sale
+
+### What shipped — marketplace.starttoday.biz (repo `Starttodaybiz/marketplace`, Vercel `prj_BcngpdpBZ6fTr5i20qiyqLHN9UCK`)
+| Surface | File | Status |
+|---------|------|--------|
+| Category type | `business_brokerage` added to `ProviderCategory` union | ✅ |
+| Category maps | `PROVIDER_CATEGORY_LABELS`/`_COLORS` (#7C2D12)/`TAKE_RATES` (0.10) | ✅ |
+| Browse banner | Gradient banner on `/browse` when `category=business_brokerage` | ✅ |
+| Public page | `/listings` + `ListingsClient.tsx` | ✅ |
+| Public API | `GET /api/listings` (state + price band + STCV filter) | ✅ |
+| Middleware | Both routes added to public-routes allowlist | ✅ |
+
+### DB layer
+- `marketplace_providers.category` check constraint extended with `business_brokerage`
+- `marketplace_projects.category` same extension (clients can post brokerage RFPs)
+- Seeded `marketplace_users` + `marketplace_providers` row for Midwest M&A Partners (slug `midwest-mna-partners`, premium tier, STVerified)
+- **NEW FK column**: `Brokerage.marketplace_provider_id UUID REFERENCES marketplace_providers(provider_id)` — explicit link, no more fragile name-matching
+
+### API filtering
+`Brokerage_Listings` WHERE `marketplace_listed=true` AND `visibility IN (qualified_buyers, public)` AND `status IN (active, under_loi)`. Joins:
+- `Brokerage` (by `Brokerage_id`) → name + marketplace_provider_id
+- `marketplace_providers` (by marketplace_provider_id) → slug for deep-link
+- `Valuations` (by `Brokerage_engagement_id`, `certified=true`) → STCV badge + cert_number
+
+### Test cases — TC-029 to TC-032
+| TC | What | Assertion |
+|----|------|-----------|
+| TC-029 | Browse business_brokerage | Category pill visible, banner renders on selection |
+| TC-029a | API surfaces listing | `GET /api/listings?state=IL` returns Bowie listing |
+| TC-030 | STCV badge wiring | Same row has `has_stcv: true`, `stcv_cert_number: STCV-26-04891` |
+| TC-031 | NDA-gated label | `visibility=qualified_buyers` row shows "🔒 NDA required for CIM" |
+| TC-032 | Brokerage deep-link | `brokerage_slug=midwest-mna-partners` set via explicit FK |
+
+---
+
+## Sprint 7.4 — CARL Brokerage™ persona
+
+### What shipped
+| Surface | Source | Status |
+|---------|--------|--------|
+| Persona route | `POST /api/c2c/brokerage/carl` | ✅ |
+| Inline panel | `components/c2c/BrokerageCarlPanel.jsx` | ✅ |
+| Listings tab | New "◈ CARL" tab in `ListingDrawer` | ✅ |
+| Valuations slot | Panel at bottom of `ValuationDrawer` body | ✅ |
+| Mandates per-card | `MandateCard` component w/ "◈ Ask CARL" toggle | ✅ |
+| Rate limit | `carl_brokerage_post: 15/min` in `lib/security/rate-limit.js` | ✅ |
+| Persona lock | `platform_ontology.CARL_BROKERAGE_PERSONA_V1` | ✅ |
+
+### 5 allowed kinds (server-side enum)
+| kind | Context required | What it does |
+|------|------------------|--------------|
+| `closest_buyers` | `listing_id` | Ranks our active mandates top-3 against this listing |
+| `valuation_defense` | `valuation_id` + optional `ask` | Defends the multiple range; can target a specific pushback |
+| `comp_transactions` | `listing_id` | Narrates the market for this industry/size profile |
+| `mandate_targets` | `mandate_id` | Describes ideal target profile + sourcing strategies |
+| `objection_handling` | `listing_id` + `ask` | Buyer-objection response framing |
+
+### Persona constraints (locked in ontology)
+- Peer-level M&A advisory voice (25+ years experience); peer to a brokerage user, NOT to buyers or sellers
+- Never fabricates comp multiples — widens ranges and says so
+- Never opines on legal/tax/securities — points to attorney network
+- Output: markdown, 250-word typical / 600-word ceiling, numbered lists preferred
+- Visual: `#7C2D12` deep amber, ◈ glyph at 28px, thinking-state animation while in-flight
+
+### Test cases — TC-033 to TC-038
+| TC | What | Assertion |
+|----|------|-----------|
+| TC-033 | CARL invalid kind | `{kind:"foo"}` → 400 `invalid_kind` with allowed-list |
+| TC-034 | CARL listing-scoped | `{kind:"closest_buyers", listing_id:…}` returns `{ok:true, response_markdown, persona:"CARL Brokerage™"}` |
+| TC-035 | CARL missing context | `{kind:"closest_buyers"}` (no listing_id) → 400 `listing_id_required` |
+| TC-036 | CARL not-your-listing | listing_id of another brokerage → 404 `listing_not_found` |
+| TC-037 | CARL rate limit | 16th request within 60s → 429 |
+| TC-038 | CARL no API key | `ANTHROPIC_API_KEY` unset → 503 `CARL not configured` |
+
+### Cross-section column gotchas (Brokerage Tier + Marketplace + CARL)
+```
+Brokerage.marketplace_provider_id — new in 7.3; explicit FK for deep-linking
+  brokerages to their marketplace provider profile. Always use this, NOT
+  firm_name string match — platform stores "Midwest M&A Partners" but
+  marketplace stores "Midwest M&A Partners, LLC" so name-match fails silently.
+
+marketplace_providers.category check — extended to include 'business_brokerage'
+  in 7.3. Adding a 7th category requires the same ALTER on both
+  marketplace_providers AND marketplace_projects (clients can post RFPs).
+
+Public middleware exceptions:
+  Marketplace: /listings and /api/listings (no auth)
+  C2C: GET /api/c2c/brokerage/valuations/[id]/pdf (regex; method-scoped to GET
+    only — POSTs to /compute, /certify, etc still require session)
+```
