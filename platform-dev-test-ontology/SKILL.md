@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Dev Test Ontology
 
-Last updated: Mar 28 2026 — all FF Log A + B items complete.
+Last updated: Jun 11 2026 — added Back-end Org Provisioning onboarding-skip playbook (seed_onboarding_complete) + TC-039.
 
 ---
 
@@ -522,3 +522,38 @@ Public middleware exceptions:
   C2C: GET /api/c2c/brokerage/valuations/[id]/pdf (regex; method-scoped to GET
     only — POSTs to /compute, /certify, etc still require session)
 ```
+
+---
+
+## Back-end Org Provisioning — Onboarding Skip Playbook
+
+When a client org is seeded through the back end (bulk SQL/migrations) rather than the live interview/wizard, the provisioned user's **first** Client Dashboard login trips the onboarding gate. This is expected — two rows auto-create on first login — and must be pre-empted as part of seeding.
+
+**The gate** (`app/page.js` → `shouldShowOnboarding`) reads two independent server-side signals; either one firing redirects to `/onboarding`:
+
+| Signal | RPC | Fires when |
+|--------|-----|-----------|
+| 1 — active interview | `get_active_interview(org, email)` | `has_active = true` (an `onboarding_interview_state` row in status `active`/`in_progress`) |
+| 2 — wizard | `get_onboarding_state(email)` | `status != 'completed'` (the 6-step `Onboarding_State` row) |
+
+Both auto-create on first login: `get_onboarding_state` inserts an `in_progress` wizard row, and `InterviewClient.bootstrap` auto-starts an interview when none is active **and** `onboarding-state.completed` is false.
+
+**Canonical fix — one call, idempotent.** Right after inserting the client `Users` row in any back-end provisioning, call:
+
+```sql
+select public.seed_onboarding_complete('user@email', '<org_uuid>');
+```
+
+It sets `Onboarding_State.status='completed'` (satisfies Signal 2 **and** stops the interview auto-start, because bootstrap sees `onboarding-state.completed=true` and routes straight to the dashboard) and closes any already-created `onboarding_interview_state` row to `complete`.
+
+**Gotchas:**
+- `onboarding_interview_state.status` terminal value is **`complete`** (valid set: `active|in_progress|complete|abandoned|guest|claimed`). `Onboarding_State.status` terminal value is **`completed`**. Easy to swap and hit the check constraint.
+- Dismissing the wizard alone does **not** pass the gate — `page.js` re-checks `status` independently of `show_onboarding`.
+- Both signals must clear; fixing only the wizard still leaves the interview redirect.
+
+Ontology: `platform_ontology` → `BACKEND_ORG_PROVISIONING_ONBOARDING_SKIP_V1`.
+
+### Test case — TC-039
+| TC | What | Assertion |
+|----|------|-----------|
+| TC-039 | Back-end org skip | After `seed_onboarding_complete(email, org)`: `get_onboarding_state(email).show_onboarding=false` AND `get_active_interview(org,email).has_active=false` → dashboard loads with no redirect |
