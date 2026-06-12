@@ -557,3 +557,30 @@ Ontology: `platform_ontology` → `BACKEND_ORG_PROVISIONING_ONBOARDING_SKIP_V1`.
 | TC | What | Assertion |
 |----|------|-----------|
 | TC-039 | Back-end org skip | After `seed_onboarding_complete(email, org)`: `get_onboarding_state(email).show_onboarding=false` AND `get_active_interview(org,email).has_active=false` → dashboard loads with no redirect |
+
+---
+
+## Org Map (client.starttoday.biz / Client-Dashboard) — Layout & Design Constants
+
+Locked 2026-06-12. Ontology: `platform_ontology` → `FRONTEND_CLIENT_DASHBOARD_ORGMAP_TUNING_V1` (full detail + dial meanings).
+
+D3 force-directed org/portfolio map. File `app/components/ClientShell.js`, big D3 useEffect (deps `[fd,vm,rep]`). Final commit `4c451bb`. Deploy: Vercel `prj_Yx534JgZNoDwMqBKsNCSRAiezeFY`, repo `Starttodaybiz/Client-Dashboard`.
+
+| Knob | Value | Where (grep anchor) | What it does |
+|------|-------|---------------------|--------------|
+| Family anchors | `Lx=W*0.10`, `Rx=W*0.96`, `Cx=W*0.5` | `Lx=W*0.10,Rx=W*0.96` | legal-left / financial-right separation; wider = more center gap |
+| Within-cluster gap | `_FAMGAP=248` | `_FAMGAP=248` | radial gap per depth ring |
+| Charge spread cap | `2.8` | `_spread=Math.min(2.8,` | `forceManyBody(-rep*_spread)`; higher = nodes pull apart |
+| Vertical force | `forceY(fyT).strength(0.022)` ×2 | `forceY(fyT).strength(0.022)` | lower = looser vertical drift (edit BOTH occurrences) |
+| Center-stack gravity | `_cRise=H*0.18`, `_cGap=160` | `_cyB=d=>` | non-hull center nodes rise (hub up); stack grows downward; `_cyB` feeds forceY + radial cy |
+| Hull margin | `76` | `_hullD(mem,76)` | boundary breathing room |
+| Hull smoothing | `curveCatmullRomClosed.alpha(0.8)` | `.alpha(0.8)` | higher = rounder/looser bulge |
+| Node↔edge repulsion | `_co=0.45,_cap=34,_mrg=16` | `_mrg=16,_cap=34,_co=0.45` | `edgeoff` force; pushes nodes off non-incident links (samples renderer Bézier) |
+| Label treatment | paper halo, no chip | `.attr("stroke","#F5F4F1").attr("stroke-width",4.5)` | `paint-order:stroke` casing on `#0F172A` text; chip rect removed; bbox stash kept for hull |
+
+Notes: hub is in **no** hull (legal = entity/trust-except-hub, financial = investment +entity/trust-except-hub when legal off). `edgeoff` persists on the sim (drag-safe) and is **not** re-added in `reForce`. Label-over-busy-fill fallback = hybrid paper-halo + faint cluster tint (purple `#6D28D9` / teal `#0E7490`). Palette: navy `#1E3A5F`, paper `#F5F4F1`, teal `#0E7490`, purple `#6D28D9`, ink `#0F172A`, orange ring `~#E07B39`.
+
+### Deployment Manifest Addition
+| App | Vercel Project | GitHub Repo | Tier |
+|-----|---------------|-------------|------|
+| client.starttoday.biz | prj_Yx534JgZNoDwMqBKsNCSRAiezeFY | Starttodaybiz/Client-Dashboard | Client Tier |
