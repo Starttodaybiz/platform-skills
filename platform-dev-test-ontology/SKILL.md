@@ -584,3 +584,59 @@ Notes: hub is in **no** hull (legal = entity/trust-except-hub, financial = inves
 | App | Vercel Project | GitHub Repo | Tier |
 |-----|---------------|-------------|------|
 | client.starttoday.biz | prj_Yx534JgZNoDwMqBKsNCSRAiezeFY | Starttodaybiz/Client-Dashboard | Client Tier |
+
+## Finance App — finance.starttoday.biz · Certified CFO Workbench (Sessions 2026-06-12/13)
+
+Locked 2026-06-13. Repo `Starttodaybiz/finance` · Vercel `prj_etyUAsXqQD6aqD8kmeU3rfE6TxeD` · Next.js 14.2.29 / node24 · main UI `components/FinanceShell.js`. SSO via `app/auth/launch/route.js` (shared `LAUNCH_TOKEN_SECRET`, `st_auth` cookie); org resolved by `get_org_id_for_email`. Final commits `d978ff3` (CFO + Debt), `5e82e07` (Real Estate + Estate + PFS).
+
+**Design spine (locked):** "One engine, two lenses" — finance = deep inputs/planning workbench; client (`Client-Dashboard`, `prj_Yx534JgZNoDwMqBKsNCSRAiezeFY`) = 3000-ft certified read that SSO deep-links into finance via `POST /api/launch/finance` → `finance.starttoday.biz/auth/launch?token=…&next=<tab>` (whitelisted lowercase tab → `/dashboard?tab=`). Every figure derives from the client's own assumptions + a cited method, written to `Verified_Calc_Results` (provenance) keyed against `Calc_Library` (method registry). Compliance posture: education-not-advice, persistent not-advice disclaimers, "Start Today Certified Calculation™". Detail views = centered modals (max-w 720, rounded 14, dark backdrop) — never right-slide shelves.
+
+### Modules — nav key · route · primary RPC (all SECURITY DEFINER, search_path public,extensions; grant authenticated,service_role)
+| Nav key | Label | Route | Read RPC | Compute RPC(s) |
+|---------|-------|-------|----------|----------------|
+| clients | Client Portfolio | (in-shell) | — | — |
+| cfo | CFO Dashboard | /api/cfo | `get_finance_cfo` | (composes the others) |
+| investments | Investments | /api/investments | `get_finance_investments` | `compute_investment_valuation_run`, `compute_fund_deployment`, `compute_exit_tax` |
+| tax | Tax Planning | /api/tax | `get_finance_tax` | `compute_tax_planning_run`, `fn_fed_ordinary_tax` |
+| equity | Cap Table + Raise | /api/captable | `get_finance_equity` | `compute_capital_raise` |
+| operating | Operating Model | /api/operating | `get_finance_operating` | `compute_operating_dcf` |
+| debt | Debt & Loans | /api/debt | `get_finance_debt` | (amortization inline) |
+| realestate | Real Estate | /api/realestate | `get_finance_realestate` | — |
+| estate | Estate & Gifting | /api/estate | `get_finance_estate` | — |
+| pfs | Personal Financials | /api/pfs | `get_finance_pfs` | — |
+| (client lens) | Certified read | /api/investments/valuation | `get_client_investment_summary` | — |
+
+### Calc_Library methods added (calc_key)
+`vc_method_blended_ev` (IPEV/AICPA/ASC820), `qsbs_1202_exit_tax` (IRC §1202), `entity_structure_tax_compare` (IRC §199A/§1402/§11/§1411; 35 ILCS 5/201), `priced_round_dilution` (NVCA/SAFE), `operating_dcf_fcff` (ASC 820 income approach), `loan_amortization_dscr` (SBA SOP 50 10).
+
+### Tables created (finance)
+`investment_valuation_runs`, `investment_valuation_scenarios`, `portfolio_scenarios`, `portfolio_scenario_lines`, view `vw_portfolio_scenario_totals`, `fund_cohorts`, `fund_deployment_periods`, view `vw_fund_deployment_summary`, `investment_exit_tax_scenarios`, `tax_rate_config` (transparent 2025 statutory constants — nothing hardcoded in logic), `tax_planning_runs`, `tax_structure_results`, `capital_raise_scenarios`, `operating_model_runs`. Provenance/registry reused: `Verified_Calc_Results`, `Calc_Library`.
+
+### Calibration tie-outs (regression anchors) — 10X org `e10b0000-0000-4000-a000-0000000000a0`
+- **CFO Total EV = $89,426,753.77** = portfolio stake $78,506,127.44 + operating DCF $10,920,626.33 (must tie to the dollar).
+- Portfolio EV base $148,204,561.42 across 6 holdings; QSBS §1202 benefit $14,143,124.77; fund AUM $260M (deployed $234M).
+- Tax (on $400k net example): S-corp recommended total **$106,050.66**, savings_vs_max **$52,756.89** (sole-prop $106,227, c-corp $158,808).
+- Cap table: 10XBeta Venture Studio LLC, FD **6,666,667** units, founders 90% / pool 10%. Raise $5M @ $20M pre → PPS **$2.916667**, investor 20%; SAFE converts at **$2.3333** for 428,571 sh.
+- Debt: 220 S. Madison $4.5M @ 6.5% / 300mo → monthly **$30,384.32**, annual DS **$364,611.87**, total interest **$4,615,296.68**, **DSCR 1.91x** (NOI $696,332), +0.66x headroom vs 1.25x covenant.
+- Real estate: 220 Madison value $6.5M, acq $1.2M, appreciation $5.3M, **equity $2.0M** (value − $4.5M debt), est tax $96K.
+- Estate: lifetime exemption **$13,990,000/individual (2025)**, annual exclusion $19,000. Jason used $500K (rem $13.49M); Michael $750K (rem $13.24M) — exemption counted only on `"709 Filed?"='Yes'` gifts.
+- PFS: combined net worth **$23,182,000** ($24,492,000 assets − $1,310,000 liab), 2 guarantors (SBA Form 413 categories).
+
+### Column gotchas (finance — registry of bugs hit)
+- `Loans."Term (months)"` is **TEXT** → cast `nullif(regexp_replace(col,'[^0-9.]','','g'),'')::numeric`. `Amount` / `Interest Rate (%)` / `Current_balance` ARE numeric.
+- Airtable mixed-case PK columns are **case-sensitive**: `"Properties_id"`, `"Property_taxes_id"`, `"Estate_plans_id"`, `"Gifting_and_lifetime_transfers_id"`, `"Trust_profiles_id"` — MUST quote in INSERT or Postgres folds to lowercase → `column "properties_id" does not exist`. (`pfs_id` is already lowercase.)
+- Text-typed money/score cols to parse: `Gifting."Asset / Amount"`, `Property_Taxes."Assessed Value"`/`"Estimated Tax"`/`"Mill Rate / Levy"`/`"Tax Year"`, `Estate_Plans."Estate Plan Readiness Score (Formula)"`, `Properties."Square Feet"`/`"Units"`/`"Year Built"`.
+- `st_cfo_snapshots` has **NO org_id** (scenario/scene-keyed) — not used. DSCR/NOI come from `st_dscr_snapshots` (cols: snapshot_id, org_id, period, noi, total_debt_service, dscr_value, dscr_status, plaid_sourced, stverify_eligible, computed_at).
+- `Start_Score` is org-scoped but 10X has no row → CFO `score` returns null (graceful — don't assume present).
+- `execute_sql` returns only the LAST statement's result — run single queries when you need a specific row back.
+
+### Seed footprint (10X demo)
+`Loans` LN-220MAD; `Properties` "220 S. Madison" + `Property_Taxes` 2025; `Estate_Plans` EP-JW-001 / EP-MJS-001; `Trust_Profiles` Walker / Schirger Family Revocable Trust; `Gifting_and_Lifetime_Transfers` GFT-001…004; `st_personal_financial_statements` ×2 (Jason, Michael); `st_dscr_snapshots` (220 Madison, DSCR 1.91, stverify_eligible).
+
+### Deploy learning (CRITICAL — reconfirmed)
+Vercel BLOCKS any deploy whose git commit-author email isn't a recognized GitHub account (state BLOCKED, zero build events — NOT spend/concurrency). All finance commits use `git -c user.email="Starttodaybiz@users.noreply.github.com" -c user.name="Starttodaybiz"`. Per-change loop: edit → `npx esbuild components/FinanceShell.js --loader:.js=jsx --outfile=/dev/null` (expect parse=0) → commit (recognized email) → push `HEAD:main` → sleep ~95 → `list_deployments` confirm top `githubCommitSha` + `state=READY` (`lambdaRuntimeStats nodejs:N` confirms full build).
+
+### Deployment Manifest Addition
+| App | Vercel Project | GitHub Repo | Tier |
+|-----|---------------|-------------|------|
+| finance.starttoday.biz | prj_etyUAsXqQD6aqD8kmeU3rfE6TxeD | Starttodaybiz/finance | Finance / CFO Tier |
