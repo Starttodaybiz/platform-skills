@@ -1,0 +1,366 @@
+{
+  "$schema_version": "platform-security-audit-state/v1",
+  "$purpose": "Machine-readable remediation state. Read by future audit runs to compute diffs and mark findings as still_open / newly_opened / auto_closed. Commit to platform-skills repo.",
+
+  "run": {
+    "id": "2026-07-22",
+    "generated_at": "2026-07-22T14:30:00Z",
+    "prior_state": null,
+    "prior_state_ref": "baseline",
+    "diff_summary": {
+      "newly_opened": [
+        "REM-001", "REM-016", "REM-017", "REM-018", "REM-019",
+        "REM-020", "REM-021", "REM-022", "REM-023", "REM-024",
+        "REM-025", "REM-026", "REM-027", "REM-028", "REM-029",
+        "REM-030", "REM-031"
+      ],
+      "still_open": [
+        "REM-002", "REM-003", "REM-004", "REM-005", "REM-006",
+        "REM-007", "REM-008", "REM-011", "REM-013", "REM-014"
+      ],
+      "newly_closed": [
+        "REM-016"
+      ],
+      "auto_closed_pending_verification": [],
+      "regressed": [
+        {
+          "id": "REM-018",
+          "note": "Class 'Next.js patched for CVE-2025-29927' was previously reported closed in Phase 0 (2026-07-08). Two repos (lender, Brokers) were found on 14.2.5 in this run. The regression is scope — the Phase 0 remediation covered 12 repos but not all."
+        }
+      ]
+    }
+  },
+
+  "open": [
+    {
+      "id": "REM-001",
+      "title": "PDF_INTERNAL_SECRET unset on Supabase project; 23 report edge fns using hardcoded fallback",
+      "severity": "CRITICAL",
+      "status": "LIVE_EXPLOITABLE",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "detection_signal": {
+        "type": "canary_probe",
+        "endpoint": "https://ptgtliwllimkswtajcmy.supabase.co/functions/v1/secrets-canary",
+        "expected_field": "PDF_INTERNAL_SECRET.set",
+        "current_value": false,
+        "expected_value": true
+      },
+      "auto_verify_query": "SELECT (net.http_get('https://ptgtliwllimkswtajcmy.supabase.co/functions/v1/secrets-canary')::text) LIKE '%\"PDF_INTERNAL_SECRET\":{\"set\":true%'"
+    },
+    {
+      "id": "REM-018",
+      "title": "lender + Brokers pinned to Next.js 14.2.5",
+      "severity": "CRITICAL",
+      "status": "LIVE_EXPLOITABLE",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "detection_signal": {
+        "type": "package_json_version_probe",
+        "repos": ["lender", "Brokers"],
+        "path": "package.json",
+        "field": "dependencies.next",
+        "expected_min_version": "14.2.25",
+        "current_values": { "lender": "14.2.5", "Brokers": "14.2.5" }
+      }
+    },
+    {
+      "id": "REM-008",
+      "title": "12 apps ship hardcoded JWT fallback secrets in source",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "detection_signal": {
+        "type": "regex_grep",
+        "pattern": "process\\.env\\.[A-Z_]+\\s*\\|\\|\\s*['\"](st-|dev-|start-today-|broker-|carl-|ep-|admin-|change-|placeholder|test-)",
+        "paths": ["middleware.js","next.config.js","app/api/auth/login/route.js","pages/api/auth/login.js","lib/auth.js","src/lib/auth.js"],
+        "current_hits": 12,
+        "expected_hits": 0
+      },
+      "affected_repos": [
+        "Admin-User","attorney-dashboard","Brokers","C2C","carl",
+        "Client-Dashboard","Client-EP","insure","lender","mga",
+        "Platform-Admin","work"
+      ]
+    },
+    {
+      "id": "REM-023",
+      "title": "5 tables with public INSERT policies (unauthenticated writes)",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "detection_signal": {
+        "type": "sql_query",
+        "query": "SELECT COUNT(*) FROM pg_policies WHERE schemaname='public' AND (qual='true' OR qual IS NULL) AND cmd='INSERT' AND roles::text LIKE '%public%'",
+        "current_value": 5,
+        "expected_value": 0
+      },
+      "affected_tables": [
+        "Compliance_Item_Documents","Document_Shares","Document_View_Log",
+        "Entity_Metric_Snapshots","professional_subscription_profiles"
+      ]
+    },
+    {
+      "id": "REM-005",
+      "title": "155 tables have RLS on but zero policies",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "detection_signal": {
+        "type": "sql_query",
+        "query": "SELECT COUNT(*) FROM pg_tables t WHERE t.schemaname='public' AND t.rowsecurity=true AND NOT EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname='public' AND p.tablename=t.tablename)",
+        "current_value": 155,
+        "expected_value_max": 20
+      }
+    },
+    {
+      "id": "REM-024",
+      "title": "47 tables with authenticated qual=true SELECT policies",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "detection_signal": {
+        "type": "sql_query",
+        "query": "SELECT COUNT(*) FROM pg_policies WHERE schemaname='public' AND (qual='true' OR qual IS NULL) AND cmd='SELECT' AND roles::text LIKE '%authenticated%' AND roles::text NOT LIKE '{service_role}'",
+        "current_value": 47,
+        "expected_value_max": 15
+      }
+    },
+    {
+      "id": "REM-002",
+      "title": "@start-today/platform-auth keystone package not yet built",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "detection_signal": {
+        "type": "github_search",
+        "query": "path:package.json \"@start-today/platform-auth\"",
+        "expected_min_hits": 3
+      }
+    },
+    {
+      "id": "REM-003",
+      "title": "MFA missing on 7 password-only portals",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "affected_repos": ["finance","property","plan","work","mga","mylegal","marketplace"]
+    },
+    {
+      "id": "REM-004",
+      "title": "mga login untested for session-before-MFA pattern",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22"
+    },
+    {
+      "id": "REM-006",
+      "title": "Parameterized data layer / eq.${} injection surface",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "prior_counts": { "work": 86, "mylegal": 52, "attorney-dashboard": 33 }
+    },
+    {
+      "id": "REM-007",
+      "title": "Real auth on get-*-report edge fn routes (client-side)",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "blocked_on": "REM-001"
+    },
+    {
+      "id": "REM-014",
+      "title": "1128 SECURITY DEFINER functions callable by anon/authenticated",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "detection_signal": {
+        "type": "advisor_count",
+        "advisor_names": ["authenticated_security_definer_function_executable", "anon_security_definer_function_executable"],
+        "current_values": { "authenticated": 574, "anon": 554 }
+      }
+    },
+    {
+      "id": "REM-019",
+      "title": "15 of 25 repos have no security headers in next.config.js",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "affected_repos": ["bank","Brokers","C2C","carl","chamber","hr","insure","marketplace","mga","mylegal","plan","prohr","sales","website","work"]
+    },
+    {
+      "id": "REM-011",
+      "title": "MFA enrollment 14% platform-wide",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "detection_signal": {
+        "type": "sql_query",
+        "query": "SELECT ROUND(100.0 * (SELECT COUNT(DISTINCT user_id) FROM auth.mfa_factors WHERE status='verified') / (SELECT COUNT(*) FROM auth.users WHERE deleted_at IS NULL))",
+        "current_value": 14,
+        "expected_value_min": 95
+      }
+    },
+    {
+      "id": "REM-013",
+      "title": "226 functions with mutable search_path",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22"
+    },
+    {
+      "id": "REM-025",
+      "title": "11 public/anon SELECT tables (unauthenticated readable)",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22"
+    },
+    {
+      "id": "REM-026",
+      "title": "82 SECURITY DEFINER views",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22"
+    },
+    {
+      "id": "REM-030",
+      "title": "readiness-reports storage bucket is public",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22"
+    },
+    {
+      "id": "REM-031",
+      "title": "AUDIT_PROXY_SECRET rotation needed post-audit",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "note": "Value passed as header in tool calls this session; will be in transcript. Rotate or delete proxies after audit close."
+    },
+    {
+      "id": "REM-017",
+      "title": "entity-mind-map legacy repo — archive candidate",
+      "severity": "LOW",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "detection_signal": {
+        "type": "github_repo_state",
+        "repo": "entity-mind-map",
+        "expected_archived": true
+      }
+    },
+    {
+      "id": "REM-020",
+      "title": "Only 4 of 25 repos have CSP",
+      "severity": "LOW",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22"
+    },
+    {
+      "id": "REM-021",
+      "title": "j@starttoday hardcoded in C2C source",
+      "severity": "LOW",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22"
+    },
+    {
+      "id": "REM-022",
+      "title": "Jason Walker hardcoded in work source",
+      "severity": "LOW",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22"
+    },
+    {
+      "id": "REM-027",
+      "title": "work/nc-debug diagnostic endpoint in production",
+      "severity": "LOW",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22"
+    },
+    {
+      "id": "REM-028",
+      "title": "sales portal has no middleware.js",
+      "severity": "LOW",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22"
+    },
+    {
+      "id": "REM-029",
+      "title": "AUDIT_PROXY_SECRET stray in DEMO Supabase project",
+      "severity": "LOW",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22"
+    }
+  ],
+
+  "closed": [
+    {
+      "id": "REM-016",
+      "title": "gh-* proxies unauthenticated GitHub PAT exposure",
+      "severity": "HIGH",
+      "closed_at": "2026-07-22",
+      "closed_by": "audit-run-2026-07-22",
+      "closed_by_deploy": ["gh-read v23", "gh-read-repo v4", "gh-search v5"],
+      "verification": "Unauth calls → 401 confirmed; authenticated calls with x-audit-token → 200 confirmed; canary probe confirms AUDIT_PROXY_SECRET.set=true, chars=64"
+    },
+    { "id": "PHASE-0-A",     "title": "employee I-9 IDOR",                          "severity": "HIGH",    "closed_at": "2026-07-08" },
+    { "id": "PHASE-0-B",     "title": "finance authz fail-closed",                  "severity": "HIGH",    "closed_at": "2026-07-08" },
+    { "id": "PHASE-0-C",     "title": "debug endpoints removed/guarded",            "severity": "MEDIUM",  "closed_at": "2026-07-08" },
+    { "id": "PHASE-0-D",     "title": "Next.js patched to ^14.2.25 across 12 repos", "severity": "HIGH",   "closed_at": "2026-07-08", "regression": "REM-018 opens scope gap - lender+Brokers were not in the 12-repo Phase 0 set" },
+    { "id": "PHASE-0.5-A",   "title": "Sales MFA confirmed operational",            "severity": "HIGH",    "closed_at": "2026-07-10" },
+    { "id": "PHASE-0.5-B",   "title": "Chamber MFA bypass fixed",                   "severity": "CRITICAL","closed_at": "2026-07-10", "commit": "1940efb" },
+    { "id": "MAGIC-LINK",    "title": "Magic link auth decommissioned",             "severity": "MEDIUM",  "closed_at": "2026-03" }
+  ],
+
+  "clean_verified": [
+    "no magic_link references anywhere in fleet",
+    "no ALLOWALL X-Frame-Options misconfigurations",
+    "no ?? fallback pattern in auth files",
+    "Client-Dashboard uses correct CSP frame-ancestors",
+    "Client-EP fully hardened baseline",
+    "sales MFA verified deployed",
+    "chamber Phase 0.5 fix verified in source",
+    "SHARE_SECRET set on Supabase (20 chars)",
+    "gh-* proxies fail-closed"
+  ],
+
+  "operational_notes": {
+    "supabase_prod": "ptgtliwllimkswtajcmy",
+    "supabase_demo": "tbihmlnqpwdeiethgwaf",
+    "vercel_team": "team_7hbKJDeZuvbjZ7aTxXxUnFv4",
+    "github_org": "Starttodaybiz",
+    "audit_proxy_endpoints": {
+      "gh-read": "https://ptgtliwllimkswtajcmy.supabase.co/functions/v1/gh-read",
+      "gh-read-repo": "https://ptgtliwllimkswtajcmy.supabase.co/functions/v1/gh-read-repo",
+      "gh-search": "https://ptgtliwllimkswtajcmy.supabase.co/functions/v1/gh-search",
+      "auth_header": "x-audit-token: <AUDIT_PROXY_SECRET>",
+      "canary": "https://ptgtliwllimkswtajcmy.supabase.co/functions/v1/secrets-canary"
+    },
+    "resume_marker": "Item #1 in prior open queue was PDF_INTERNAL_SECRET verification. That verification confirmed the vulnerability. This run establishes the fresh baseline."
+  }
+}

@@ -1,0 +1,574 @@
+{
+  "audit_run": {
+    "id": "2026-07-22",
+    "generated_at": "2026-07-22T14:30:00Z",
+    "auditor": "platform-security-audit skill v2",
+    "operator": "Jason Walker (COO)",
+    "prior_state_ref": null,
+    "phase": "post-Phase-0.5 remediation program",
+    "supabase_prod": "ptgtliwllimkswtajcmy",
+    "supabase_demo": "tbihmlnqpwdeiethgwaf",
+    "vercel_team": "team_7hbKJDeZuvbjZ7aTxXxUnFv4",
+    "github_org": "Starttodaybiz"
+  },
+
+  "db_posture": {
+    "tables": 1514,
+    "views": 289,
+    "functions": 2799,
+    "rls_on": 1409,
+    "rls_off": 105,
+    "rls_on_no_policy": 155,
+    "always_true_policies_total": 776,
+    "always_true_dangerous": 64,
+    "always_true_service_role_only": 712,
+    "public_insert_dangerous": 5,
+    "public_select_dangerous": 7,
+    "anon_select_dangerous": 4,
+    "authenticated_select_dangerous": 47,
+    "authenticated_insert_dangerous": 1,
+    "definer_fns_authenticated": 574,
+    "definer_fns_anon": 554,
+    "definer_views": 82,
+    "mutable_search_path_advisor": 226,
+    "mutable_search_path_actual": 1098,
+    "auth_users_total": 50,
+    "mfa_verified_users": 7,
+    "mfa_enrollment_pct": 14,
+    "chamber_users_total": 11,
+    "chamber_users_mfa": 3,
+    "storage_buckets_total": 46,
+    "storage_buckets_public": 4,
+    "public_bucket_listing_advisories": 4,
+    "extensions_in_public": 4
+  },
+
+  "advisor_totals": {
+    "security_total": 1730,
+    "security_error": 208,
+    "security_warn": 1362,
+    "security_info": 160,
+    "performance_total": 3861,
+    "performance_warn": 1952,
+    "performance_info": 1909,
+    "top_security_names": [
+      { "name": "authenticated_security_definer_function_executable", "count": 574 },
+      { "name": "anon_security_definer_function_executable", "count": 554 },
+      { "name": "function_search_path_mutable", "count": 226 },
+      { "name": "rls_enabled_no_policy", "count": 160 },
+      { "name": "rls_disabled_in_public", "count": 126 },
+      { "name": "security_definer_view", "count": 82 },
+      { "name": "extension_in_public", "count": 4 },
+      { "name": "public_bucket_allows_listing", "count": 4 }
+    ],
+    "top_performance_names": [
+      { "name": "multiple_permissive_policies", "count": 1549 },
+      { "name": "unused_index", "count": 1231 },
+      { "name": "unindexed_foreign_keys", "count": 666 },
+      { "name": "auth_rls_initplan", "count": 392 },
+      { "name": "duplicate_index", "count": 11 },
+      { "name": "no_primary_key", "count": 9 },
+      { "name": "table_bloat", "count": 2 }
+    ]
+  },
+
+  "edge_functions": {
+    "total": 341,
+    "jwt_on": 51,
+    "jwt_off": 290,
+    "get_report_fns": 23,
+    "get_report_fns_all_vulnerable_pdf_secret": true,
+    "canary_probe_result": {
+      "PDF_INTERNAL_SECRET": { "set": false, "chars": 0 },
+      "SHARE_SECRET":         { "set": true,  "chars": 20 },
+      "JWT_SECRET":           { "set": false, "chars": 0 },
+      "AUDIT_PROXY_SECRET":   { "set": true,  "chars": 64 }
+    }
+  },
+
+  "repo_inventory": {
+    "targets_probed": 26,
+    "confirmed": 24,
+    "not_found": 2,
+    "not_found_names": ["banking-treasury-portal (aliased via bank/lender)", "broker (actual name: Brokers)"],
+    "next_js_versions": [
+      { "repo": "accounting",          "package": "accounting",             "next": "14.2.29",  "jose": "^5.9.6",  "app_router": true,  "notes": "" },
+      { "repo": "Admin-User",          "package": "platform-admin",         "next": "14.2.35",  "jose": "^6.2.1",  "app_router": true,  "notes": "v3.0.0 - separate from Platform-Admin" },
+      { "repo": "attorney-dashboard",  "package": "attorney-dashboard",     "next": "^14.2.25", "jose": "^6.2.1",  "app_router": true,  "notes": "" },
+      { "repo": "bank",                "package": "banking-treasury-portal","next": "^14.2.25", "jose": "^6.2.2",  "app_router": true,  "notes": "Pages Router login" },
+      { "repo": "Brokers",             "package": "broker-portal",          "next": "14.2.5",   "jose": null,       "app_router": true,  "notes": "CRITICAL: below CVE-2025-29927 fix" },
+      { "repo": "C2C",                 "package": "c2c",                    "next": "^14.2.25", "jose": "^5.2.0",  "app_router": true,  "notes": "" },
+      { "repo": "carl",                "package": "carl",                   "next": "^14.2.25", "jose": "^5.2.0",  "app_router": true,  "notes": "Jason+Michael only, tiny surface" },
+      { "repo": "chamber",             "package": "chamber-portal",         "next": "^14.2.25", "jose": "^5.9.6",  "app_router": true,  "notes": "src/ prefix layout; Phase 0.5 MFA fix" },
+      { "repo": "Client-Dashboard",    "package": "client-shell",           "next": "14.2.35",  "jose": "^6.2.1",  "app_router": true,  "notes": "highest-volume client portal, 81 top-level API entries" },
+      { "repo": "Client-EP",           "package": "client-ep",              "next": "14.2.35",  "jose": "^6.2.1",  "app_router": true,  "notes": "best-configured portal - full headers + CSP" },
+      { "repo": "compliance-User",     "package": "compliance-user",        "next": "14.2.35",  "jose": "^6.2.1",  "app_router": true,  "notes": "" },
+      { "repo": "finance",             "package": "finance",                "next": "14.2.29",  "jose": "^5.9.6",  "app_router": true,  "notes": "" },
+      { "repo": "hr",                  "package": "start-today-hr",         "next": "^15.3.9",  "jose": "^5.10.0", "app_router": true,  "notes": "Next.js 15, src/ prefix, TypeScript" },
+      { "repo": "insure",              "package": "insure-portal",          "next": "^14.2.25", "jose": "^5.2.0",  "app_router": true,  "notes": "" },
+      { "repo": "lender",              "package": "banking-treasury-portal","next": "14.2.5",   "jose": "^6.2.2",  "app_router": false, "notes": "CRITICAL: below CVE-2025-29927 fix; Pages Router" },
+      { "repo": "marketplace",         "package": "marketplace",            "next": "^14.2.25", "jose": "^5.2.4",  "app_router": true,  "notes": "src/ prefix" },
+      { "repo": "mga",                 "package": "mga-portal",             "next": "14.2.29",  "jose": "^5",       "app_router": true,  "notes": "" },
+      { "repo": "mylegal",             "package": "mylegal",                "next": "14.2.29",  "jose": "^5.9.6",  "app_router": true,  "notes": "" },
+      { "repo": "plan",                "package": "plan-starttoday",        "next": "^14.2.25", "jose": "^5.2.4",  "app_router": true,  "notes": "" },
+      { "repo": "Platform-Admin",      "package": "platform-admin",         "next": "14.2.35",  "jose": "^6.2.1",  "app_router": true,  "notes": "v1.0.0 - separate from Admin-User" },
+      { "repo": "prohr",               "package": "start-today-hr-pro",     "next": "^15.3.9",  "jose": "^5.10.0", "app_router": true,  "notes": "Next.js 15, src/ prefix, TypeScript" },
+      { "repo": "property",            "package": "property",               "next": "14.2.29",  "jose": "^5.9.6",  "app_router": true,  "notes": "" },
+      { "repo": "sales",               "package": "sales",                  "next": "14.2.29",  "jose": "^5.2.0",  "app_router": true,  "notes": "no middleware - relies on route-level guards only" },
+      { "repo": "website",             "package": "starttoday-marketing",   "next": "^14.2.25", "jose": null,       "app_router": true,  "notes": "marketing site, no auth" },
+      { "repo": "work",                "package": "work",                   "next": "^14.2.25", "jose": "^5.2.0",  "app_router": true,  "notes": "" }
+    ]
+  },
+
+  "auth_matrix": [
+    { "repo": "Admin-User",         "cookie": "pa_admin_session",       "jwt_env": "JWT_SECRET",           "mode": "A",  "fallback": "start-today-admin-secret-2026" },
+    { "repo": "attorney-dashboard", "cookie": "st_auth",                "jwt_env": "SESSION_SECRET",       "mode": "A",  "fallback": "st-legal-fallback-2026" },
+    { "repo": "bank",               "cookie": null,                     "jwt_env": "SESSION_SECRET",       "mode": "A",  "fallback": null },
+    { "repo": "Brokers",            "cookie": "broker_session",         "jwt_env": "BROKER_JWT_SECRET",    "mode": "A",  "fallback": "broker-portal-secret-change-in-production" },
+    { "repo": "C2C",                "cookie": "st_auth_v2",             "jwt_env": "SESSION_SECRET",       "mode": "A",  "fallback": "st-c2c-2026-jwt-s3cr3t-k3y-x9z!" },
+    { "repo": "carl",               "cookie": "carl_session",           "jwt_env": "SESSION_SECRET",       "mode": "N/A","fallback": "carl-session-secret-2026" },
+    { "repo": "chamber",            "cookie": "chamber_session",        "jwt_env": "JWT_SECRET",           "mode": "B",  "fallback": null },
+    { "repo": "Client-Dashboard",   "cookie": "st_client",              "jwt_env": "SESSION_SECRET",       "mode": "A",  "fallback": "st-client-fallback-2026" },
+    { "repo": "Client-EP",          "cookie": "ep_session",             "jwt_env": "SESSION_SECRET",       "mode": "A",  "fallback": "ep-fallback-2026" },
+    { "repo": "compliance-User",    "cookie": "compliance_session",     "jwt_env": "SESSION_SECRET",       "mode": "A",  "fallback": null },
+    { "repo": "finance",            "cookie": "st_auth",                "jwt_env": "SESSION_SECRET",       "mode": "A?", "fallback": null },
+    { "repo": "insure",             "cookie": "insure_session",         "jwt_env": "INSURE_JWT_SECRET",    "mode": "A",  "fallback": "dev-insure-secret-32chars-minimum!!" },
+    { "repo": "lender",             "cookie": "st_lender_mfa_pending",  "jwt_env": "SESSION_SECRET",       "mode": "A/B","fallback": "st-lender-fallback-2026" },
+    { "repo": "mga",                "cookie": null,                     "jwt_env": "MGA_JWT_SECRET",       "mode": "?",  "fallback": "dev-secret-change-me" },
+    { "repo": "mylegal",            "cookie": null,                     "jwt_env": null,                   "mode": "A/B","fallback": null },
+    { "repo": "plan",               "cookie": null,                     "jwt_env": "SESSION_SECRET",       "mode": "A/B","fallback": null },
+    { "repo": "Platform-Admin",    "cookie": "pa_admin_session",       "jwt_env": "ADMIN_JWT_SECRET",     "mode": "A",  "fallback": "st-admin-fallback-2026" },
+    { "repo": "property",           "cookie": "st_auth",                "jwt_env": "SESSION_SECRET",       "mode": "A?", "fallback": null },
+    { "repo": "sales",              "cookie": null,                     "jwt_env": null,                   "mode": "A",  "fallback": null },
+    { "repo": "work",               "cookie": null,                     "jwt_env": "SESSION_SECRET",       "mode": "A?", "fallback": "st-work-fallback-2026" }
+  ],
+
+  "security_headers": {
+    "repos_with_headers": 10,
+    "repos_without_headers": 15,
+    "repos_with_csp": 4,
+    "with_headers": ["accounting","Admin-User","attorney-dashboard","Client-Dashboard","Client-EP","compliance-User","finance","lender","Platform-Admin","property"],
+    "without_headers": ["bank","Brokers","C2C","carl","chamber","hr","insure","marketplace","mga","mylegal","plan","prohr","sales","website","work"],
+    "with_csp": ["attorney-dashboard","Client-Dashboard","Client-EP","compliance-User"],
+    "allowall_xframe_found": false
+  },
+
+  "api_route_counts": [
+    { "repo": "Client-Dashboard",   "top_entries": 81, "layout": "app/api" },
+    { "repo": "compliance-User",    "top_entries": 33, "layout": "app/api" },
+    { "repo": "attorney-dashboard", "top_entries": 25, "layout": "app/api" },
+    { "repo": "finance",            "top_entries": 24, "layout": "app/api" },
+    { "repo": "mylegal",            "top_entries": 17, "layout": "app/api" },
+    { "repo": "bank",               "top_entries": 12, "layout": "app/api + pages/api" },
+    { "repo": "hr",                 "top_entries": 11, "layout": "src/app/api" },
+    { "repo": "chamber",            "top_entries": 9,  "layout": "src/app/api" },
+    { "repo": "sales",              "top_entries": 9,  "layout": "app/api" },
+    { "repo": "prohr",              "top_entries": 7,  "layout": "src/app/api + app/api" },
+    { "repo": "C2C",                "top_entries": 7,  "layout": "app/api" },
+    { "repo": "accounting",         "top_entries": 6,  "layout": "app/api" },
+    { "repo": "Brokers",            "top_entries": 6,  "layout": "app/api" },
+    { "repo": "marketplace",        "top_entries": 6,  "layout": "src/app/api" },
+    { "repo": "mga",                "top_entries": 6,  "layout": "app/api" },
+    { "repo": "insure",             "top_entries": 5,  "layout": "app/api" },
+    { "repo": "lender",             "top_entries": 5,  "layout": "pages/api" },
+    { "repo": "work",               "top_entries": 5,  "layout": "app/api", "debug_entries": ["nc-debug"] },
+    { "repo": "plan",               "top_entries": 4,  "layout": "app/api" },
+    { "repo": "Client-EP",          "top_entries": 4,  "layout": "app/api" },
+    { "repo": "Platform-Admin",     "top_entries": 4,  "layout": "app/api" },
+    { "repo": "property",           "top_entries": 3,  "layout": "app/api" },
+    { "repo": "Admin-User",         "top_entries": 2,  "layout": "app/api" }
+  ],
+
+  "open_findings": [
+    {
+      "id": "REM-001",
+      "severity": "CRITICAL",
+      "title": "PDF_INTERNAL_SECRET unset on Supabase project; 23 report edge fns using hardcoded fallback",
+      "status": "LIVE_EXPLOITABLE",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "evidence": "secrets-canary probe: PDF_INTERNAL_SECRET.set=false; get-start-score-report v35 source contains `Deno.env.get('PDF_INTERNAL_SECRET')??'st-pdf-internal-2026'`",
+      "impact": "Any attacker who reads deployed edge fn source can forge x-internal-token: st-pdf-internal-2026 + arbitrary x-user-email to receive fully rendered reports (KYC/AML, financials, ownership, HR audit, I-9, etc.) for any org.",
+      "remediation": "1) Enumerate all Vercel callers of the 23 fns (grep PDF_INTERNAL_SECRET across repos - completed). 2) Generate strong random secret. 3) Set PDF_INTERNAL_SECRET on Supabase edge fn secrets. 4) Simultaneously set on all Vercel callers. 5) Deploy edge fns v-next with hardcoded fallback removed (fail-closed). 6) Verify canary shows all values properly set.",
+      "vercel_callers_grep_status": "REM-008 identifies these; overlap analysis needed",
+      "affected_edge_fns": ["get-annual-report-log","get-coi-tracker-report","get-compliance-calendar-report","get-debt-covenant-report","get-entity-master-report","get-financial-reporting","get-financial-summary-report","get-fixed-asset-report","get-hr-audit-report","get-i9-compliance-report","get-insurance-reports","get-kyc-aml-report","get-kyc-dataroom-reports","get-license-master-report","get-loan-register-report","get-ownership-structure-report","get-property-reports","get-property-summary-report","get-registered-agent-report","get-start-score-report","get-state-tax-report","get-succession-plan-report","get-trust-register-report"]
+    },
+    {
+      "id": "REM-018",
+      "severity": "CRITICAL",
+      "title": "lender + Brokers pinned to Next.js 14.2.5 (below CVE-2025-29927 fix)",
+      "status": "LIVE_EXPLOITABLE",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "evidence": "package.json dependencies.next = '14.2.5' in both lender (banking-treasury-portal) and Brokers repos. Fix was Next.js 14.2.25.",
+      "impact": "Middleware bypass — attackers can craft requests that skip middleware auth checks and reach protected routes directly.",
+      "remediation": "Bump both repos to ^14.2.25 or higher (Client-Dashboard on 14.2.35, Client-EP on 14.2.35 are the current fleet standard). Deploy, verify. Add CI gate.",
+      "affected_apps": ["lender.starttoday.biz", "broker deployment (URL to confirm)"]
+    },
+    {
+      "id": "REM-008",
+      "severity": "HIGH",
+      "title": "Hardcoded JWT fallback secrets in 12 apps",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "evidence": "grep across all repo middleware.js/next.config.js/login-route/lib-auth files identified `process.env.X || 'literal-string'` pattern in 12 repos with actual secret values.",
+      "impact": "If ANY app's JWT env var is unset (rotation window, config drift, accidental deletion, new deploy), the app falls back to a source-visible string, making JWT signing forgeable by anyone with access to the deployed code.",
+      "remediation": "For each of the 12 apps: 1) Confirm the env var is set on Vercel. 2) Replace `process.env.X || 'literal'` with fail-closed `getSecret()` throw pattern (chamber Phase 0.5 blueprint). 3) Deploy. 4) After all 12 shipped, do fleet-wide gitleaks scan to confirm no residuals.",
+      "affected_repos": [
+        { "repo": "Admin-User",         "fallback": "start-today-admin-secret-2026",         "env": "JWT_SECRET" },
+        { "repo": "attorney-dashboard", "fallback": "st-legal-fallback-2026",                "env": "SESSION_SECRET" },
+        { "repo": "Brokers",            "fallback": "broker-portal-secret-change-in-production", "env": "BROKER_JWT_SECRET" },
+        { "repo": "C2C",                "fallback": "st-c2c-2026-jwt-s3cr3t-k3y-x9z!",       "env": "SESSION_SECRET" },
+        { "repo": "carl",               "fallback": "carl-session-secret-2026",              "env": "SESSION_SECRET" },
+        { "repo": "Client-Dashboard",   "fallback": "st-client-fallback-2026",               "env": "SESSION_SECRET" },
+        { "repo": "Client-EP",          "fallback": "ep-fallback-2026",                      "env": "SESSION_SECRET" },
+        { "repo": "insure",             "fallback": "dev-insure-secret-32chars-minimum!!",   "env": "INSURE_JWT_SECRET" },
+        { "repo": "lender",             "fallback": "st-lender-fallback-2026",               "env": "SESSION_SECRET" },
+        { "repo": "mga",                "fallback": "dev-secret-change-me",                  "env": "MGA_JWT_SECRET" },
+        { "repo": "Platform-Admin",     "fallback": "st-admin-fallback-2026",                "env": "ADMIN_JWT_SECRET" },
+        { "repo": "work",               "fallback": "st-work-fallback-2026",                 "env": "SESSION_SECRET" }
+      ]
+    },
+    {
+      "id": "REM-023",
+      "severity": "HIGH",
+      "title": "Unauthenticated INSERT policies on 5 production tables",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "evidence": "pg_policies query: 5 policies with qual=true, cmd=INSERT, roles={public}",
+      "affected_tables": ["Compliance_Item_Documents","Document_Shares","Document_View_Log","Entity_Metric_Snapshots","professional_subscription_profiles"],
+      "impact": "Unauthenticated requests can create rows. Document_View_Log likely intentional (analytics), but Document_Shares and Compliance_Item_Documents allowing unauthenticated INSERT is a data-integrity risk.",
+      "remediation": "For each: audit the current caller pattern, replace qual=true with a real access check (org membership + entity access), or move the INSERT to a SECURITY DEFINER RPC with server-side authorization."
+    },
+    {
+      "id": "REM-005",
+      "severity": "HIGH",
+      "title": "155 tables have RLS on but zero policies (deny-all effectively; audit-visible)",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "notable_tables": ["Client_PII_Access","Investment_Verifications","Investment_Valuations","Investment_Capital_Calls","Pro_Credentials","Pro_Onboarding_Interviews","Tax_Payment_History","cap_equity_holders","cap_share_classes","stripe_charges","stripe_customers","stripe_subscriptions"],
+      "impact": "SOC 2 finding: RLS declared but policies never authored. Functionally these tables are locked (deny-all), but they signal incomplete authorization design. If a policy is added later that isn't tight, exposure emerges.",
+      "remediation": "For each table, either (a) confirm service-role-only access is the design intent and document that decision, or (b) author appropriate policies for authenticated roles. Batch by domain: Investment_*, Pro_*, cap_*, stripe_*."
+    },
+    {
+      "id": "REM-024",
+      "severity": "HIGH",
+      "title": "47 authenticated-role tables with qual=true policies (any authenticated JWT can read)",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "notable_tables": ["SEC_Form_D_Filings","foreign_investments","foreign_investors","investor_beneficial_owners","fund_deployment_periods","investment_valuation_scenarios","portfolio_scenario_lines","sba_debenture_schedule"],
+      "impact": "Any authenticated user across any portal can read financially/regulatorily sensitive data. Some are legitimate reference data (dol_form5500, etc.); the financial holdings tables are not.",
+      "remediation": "Split the list into (a) legitimate authenticated-read reference data (leave as-is, mark policy names with _public_lookup_intentional suffix), and (b) sensitive holdings that need org-scoped policies. Michael to approve the split."
+    },
+    {
+      "id": "REM-002",
+      "severity": "HIGH",
+      "title": "@start-today/platform-auth keystone package not yet built",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "impact": "Every future portal reimplements auth from scratch, replicating this class of bugs (fallback secrets, MFA gate ordering, cookie handling).",
+      "remediation": "Build shared package with: fail-closed secret loader, jose session verify+sign, org-binding helper, MFA gate middleware factory, cookie handling. Migrate portals incrementally starting with newest (chamber pattern is the reference)."
+    },
+    {
+      "id": "REM-003",
+      "severity": "HIGH",
+      "title": "MFA still password-only on finance, property, plan, work, mga, mylegal, marketplace",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "evidence": "auth matrix shows MFA mode 'A?' or '?' for these repos - either not enforced or partially implemented. mga has no MFA marker at all.",
+      "impact": "Provider-side and internal-tools portals accept password-only login. Session hijack via credential leak becomes portal-wide compromise.",
+      "remediation": "Apply chamber Phase 0.5 blueprint to each: fail-closed getSecret + pending-token cookie + login-then-TOTP flow. Order by user count and blast radius: work (internal escalation, most privileged), finance (financial data), property, plan, mga, mylegal, marketplace."
+    },
+    {
+      "id": "REM-004",
+      "severity": "HIGH",
+      "title": "mga login untested for session-before-MFA pattern",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "evidence": "mga middleware sets MGA_JWT_SECRET with fallback but shows no MFA marker; login route not detected at any expected path.",
+      "impact": "Same class of vulnerability as chamber pre-Phase 0.5: if login mints a full session before TOTP validation, MFA can be bypassed.",
+      "remediation": "Locate mga login route (probably under app/api/auth/login/route.js — needs manual read since B2b probes didn't find it). Audit for setSession/issueSession calls occurring before TOTP verify. Apply fix if present."
+    },
+    {
+      "id": "REM-014",
+      "severity": "HIGH",
+      "title": "1128 SECURITY DEFINER functions callable by anon/authenticated (attack surface)",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "evidence": "574 fns callable by authenticated, 554 by anon. Each is a potential unauthorized escalation vector.",
+      "remediation": "Triage: identify fns intentionally exposed (RPCs called from client), revoke execute from anon/authenticated on all others. Combine with search_path fix (REM-013)."
+    },
+    {
+      "id": "REM-019",
+      "severity": "MEDIUM",
+      "title": "15 of 25 repos have no security headers in next.config.js",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "affected_repos": ["bank","Brokers","C2C","carl","chamber","hr","insure","marketplace","mga","mylegal","plan","prohr","sales","website","work"],
+      "impact": "Missing HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy. Clickjacking, MIME-sniffing, HTTPS downgrade risks.",
+      "remediation": "Add async headers() to next.config.js in each app. Reference implementation: Client-EP or attorney-dashboard. Include CSP for portals handling sensitive data (client-facing at minimum)."
+    },
+    {
+      "id": "REM-011",
+      "severity": "MEDIUM",
+      "title": "MFA enrollment 14% platform-wide (7/50 auth.users)",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "impact": "SOC 2 CC6.1/CC6.2 finding: MFA infrastructure present but adoption incomplete. Chamber operators 3/11 (27%), other portals unknown enrollment.",
+      "remediation": "For each portal with MFA infrastructure: force enrollment on next login (Mode A). Track enrollment %, target 100% before SOC 2 Type II window opens."
+    },
+    {
+      "id": "REM-013",
+      "severity": "MEDIUM",
+      "title": "226 functions with mutable search_path (Supabase advisor)",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "impact": "Search path injection can hijack function calls, redirect to attacker-controlled schemas.",
+      "remediation": "SET search_path TO 'public','extensions' on every SECURITY DEFINER function. Batch via generated ALTER FUNCTION statements. Add CI gate to prevent new SECURITY DEFINER fns without search_path."
+    },
+    {
+      "id": "REM-025",
+      "severity": "MEDIUM",
+      "title": "7 public SELECT + 4 anon SELECT policies (unauthenticated readable tables)",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "public_read_tables": ["G_Feature_Permissions","Platform_Settings","Platform_Theme_Config","bank_clean_room_protocols","plan_feature_access","st_integrations_catalog","st_qa_classifications"],
+      "anon_read_tables": ["Consent_Language","G_Matter_Statuses","G_Matter_Types","integration_providers"],
+      "remediation": "Most look like reference/configuration data intentionally readable. Confirm each with the domain owner, add `_public_lookup_intentional` suffix to policy name to document intent, or restrict if data has changed sensitivity."
+    },
+    {
+      "id": "REM-026",
+      "severity": "MEDIUM",
+      "title": "82 SECURITY DEFINER views",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "impact": "SECURITY DEFINER views bypass RLS of caller. Legitimate use cases exist (aggregations, admin dashboards) but each should be reviewed.",
+      "remediation": "Enumerate and classify each view. Convert to plain views where possible; document remaining as intentional."
+    },
+    {
+      "id": "REM-007",
+      "severity": "HIGH",
+      "title": "Real auth on get-*-report edge fn routes (client-side)",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "notes": "The Vercel-side wrapper routes for report generation should not blindly pass user email as x-user-email header. They should verify the session first, then set the header from the verified session.",
+      "remediation": "Blocked pending REM-001 rotation."
+    },
+    {
+      "id": "REM-006",
+      "severity": "HIGH",
+      "title": "Parameterized data layer / eq.${} injection surface",
+      "status": "OPEN",
+      "first_seen": "prior audit",
+      "last_verified": "2026-07-22",
+      "impact": "PostgREST query construction using string interpolation is vulnerable to filter injection.",
+      "remediation": "Replace with parameterized query builders. Prior counts: Work 86, mylegal 52, attorney 33 instances. Need fresh sweep post-remediation."
+    },
+    {
+      "id": "REM-020",
+      "severity": "LOW",
+      "title": "Only 4 of 25 repos have Content-Security-Policy defined",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "with_csp": ["attorney-dashboard","Client-Dashboard","Client-EP","compliance-User"],
+      "remediation": "Add CSP to all client-facing portals. Start with report-only mode to catch violations, then move to enforce."
+    },
+    {
+      "id": "REM-021",
+      "severity": "LOW",
+      "title": "Team email hardcoded in C2C source",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "evidence": "'j@starttoday' appears in C2C/app/api/auth/login/route.js and C2C/src/lib/auth.js (or lib/auth.js)",
+      "remediation": "Move to env var or config table. Low urgency."
+    },
+    {
+      "id": "REM-022",
+      "severity": "LOW",
+      "title": "Team name hardcoded in work source",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "evidence": "'Jason Walker' appears in work/app/api/auth/login/route.js",
+      "remediation": "Move to config. Low urgency."
+    },
+    {
+      "id": "REM-017",
+      "severity": "LOW",
+      "title": "entity-mind-map legacy repo — archive candidate",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "evidence": "Only repo indexed by GitHub code search in the Starttodaybiz org; flagged by owner as old.",
+      "remediation": "Archive via GitHub repo settings."
+    },
+    {
+      "id": "REM-027",
+      "severity": "LOW",
+      "title": "work/nc-debug diagnostic endpoint in production",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "evidence": "app/api/nc-debug/route.js exists on production main branch. Author comment: 'Prefer deleting this route once resolved.'",
+      "remediation": "Delete if resolved; otherwise leave (properly gated fail-closed on NC_DEBUG_TOKEN)."
+    },
+    {
+      "id": "REM-028",
+      "severity": "LOW",
+      "title": "sales portal has no middleware.js",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "impact": "Sales relies entirely on route-level auth guards. If any route omits the guard, it's exposed. No middleware layer as defense in depth.",
+      "remediation": "Add sales middleware.js following Client-Dashboard pattern."
+    },
+    {
+      "id": "REM-029",
+      "severity": "LOW",
+      "title": "AUDIT_PROXY_SECRET stray in DEMO Supabase project",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "evidence": "Set on tbihmlnqpwdeiethgwaf during initial mistake; PROD project now has correct value. DEMO has no gh-* fns so the value is inert.",
+      "remediation": "Remove from DEMO project's edge function secrets. Housekeeping only."
+    },
+    {
+      "id": "REM-030",
+      "severity": "MEDIUM",
+      "title": "readiness-reports storage bucket is public",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "evidence": "storage.buckets: readiness-reports.public=true, file_size_limit 10MB, allowed_mime application/pdf",
+      "impact": "If bucket contains generated reports with real org data, they're accessible without auth.",
+      "remediation": "Audit bucket contents. If PII-bearing PDFs present, make bucket private and issue signed URLs for access."
+    },
+    {
+      "id": "REM-031",
+      "severity": "MEDIUM",
+      "title": "AUDIT_PROXY_SECRET rotation needed post-audit",
+      "status": "OPEN",
+      "first_seen": "2026-07-22",
+      "last_verified": "2026-07-22",
+      "evidence": "Value was passed as header in tool call during this session; will be in transcript.",
+      "remediation": "After audit complete: rotate AUDIT_PROXY_SECRET to a fresh value, update AUDIT_PROXY_SECRET on Supabase. Alternatively, delete the gh-* proxies now that the audit is done."
+    }
+  ],
+
+  "closed_findings": [
+    {
+      "id": "REM-016",
+      "severity": "HIGH",
+      "title": "gh-read, gh-read-repo, gh-search proxies unauthenticated GitHub PAT exposure",
+      "status": "CLOSED",
+      "closed_at": "2026-07-22",
+      "closed_by_deploy": ["gh-read v23", "gh-read-repo v4", "gh-search v5 (with error propagation)"],
+      "verification": "Unauth calls → 401; authenticated calls with x-audit-token → 200. Canary probe: AUDIT_PROXY_SECRET.set=true, chars=64.",
+      "notes": "Closed during this audit run — pattern demonstrates the state-file lifecycle."
+    },
+    {
+      "id": "PHASE-0-A",
+      "severity": "HIGH",
+      "title": "employee I-9 IDOR",
+      "status": "CLOSED",
+      "closed_at": "2026-07-08",
+      "verification": "Phase 0 deploy shipped and verified"
+    },
+    {
+      "id": "PHASE-0-B",
+      "severity": "HIGH",
+      "title": "finance authz fail-closed",
+      "status": "CLOSED",
+      "closed_at": "2026-07-08"
+    },
+    {
+      "id": "PHASE-0-C",
+      "severity": "MEDIUM",
+      "title": "debug endpoints removed/guarded",
+      "status": "CLOSED",
+      "closed_at": "2026-07-08"
+    },
+    {
+      "id": "PHASE-0-D",
+      "severity": "HIGH",
+      "title": "Next.js patched to ^14.2.25 across 12 repos (CVE-2025-29927)",
+      "status": "PARTIAL",
+      "closed_at": "2026-07-08",
+      "regression_note": "lender and Brokers found on 14.2.5 - REM-018 re-opens this class"
+    },
+    {
+      "id": "PHASE-0.5-A",
+      "severity": "HIGH",
+      "title": "Sales MFA confirmed operational (was stale flag)",
+      "status": "CLOSED",
+      "closed_at": "2026-07-10"
+    },
+    {
+      "id": "PHASE-0.5-B",
+      "severity": "CRITICAL",
+      "title": "Chamber MFA bypass fixed (session-before-MFA + hardcoded fallback)",
+      "status": "CLOSED",
+      "closed_at": "2026-07-10",
+      "commit": "1940efb",
+      "verification": "chamber src/lib/auth.js reads 'Fail-closed: missing JWT_SECRET throws on any auth op rather than falling back to a public string'"
+    },
+    {
+      "id": "MAGIC-LINK",
+      "severity": "MEDIUM",
+      "title": "Magic link authentication decommissioned",
+      "status": "CLOSED",
+      "closed_at": "2026-03",
+      "verification": "Zero magic_link references across all repos scanned in Pass 2"
+    }
+  ],
+
+  "clean_findings": [
+    "Zero magic_link references anywhere in fleet (decommission complete)",
+    "Zero ALLOWALL X-Frame-Options misconfigurations",
+    "Zero ?? fallback pattern in auth files (only legacy || pattern present)",
+    "Client-Dashboard uses correct CSP frame-ancestors (modern replacement for X-Frame-Options)",
+    "Client-EP is best-configured portal: Next 14.2.35, jose ^6.2.1, full headers, CSP",
+    "Sales MFA verified deployed and correct",
+    "Chamber Phase 0.5 fix verified in source",
+    "SHARE_SECRET set on Supabase (20 chars)",
+    "gh-* proxies now fail-closed with x-audit-token bearer"
+  ],
+
+  "soc2_criteria_summary": {
+    "cc1_control_environment": "PARTIAL - policy documentation partial, no formal control environment attestation",
+    "cc2_communication": "PARTIAL - Work Hub escalation is documented; formal comms plan not",
+    "cc3_risk_assessment": "PARTIAL - this audit is the current risk assessment mechanism",
+    "cc4_monitoring": "GAP - no centralized logging + anomaly alerting (REM-XXX in queue)",
+    "cc5_control_activities": "PARTIAL - authorization framework via RLS is comprehensive but with active gaps (REM-005, REM-023, REM-024)",
+    "cc6_1_logical_physical_access": "PARTIAL - MFA infrastructure present at 14% enrollment; per-app MFA gaps remain",
+    "cc6_2_prior_access_authorization": "PARTIAL - portal_invitations mechanism exists, needs formal review workflow",
+    "cc6_3_removal_of_access": "PARTIAL - no formal offboarding runbook",
+    "cc6_6_management_of_credentials": "GAP - 12 apps ship hardcoded fallback JWT secrets (REM-008)",
+    "cc6_7_transmission_disposal": "PARTIAL - HTTPS enforced via Vercel; 15 apps lack HSTS headers",
+    "cc6_8_prevention_of_unauth": "PARTIAL - RLS declared broadly; 155 tables have RLS-no-policy pattern",
+    "cc7_1_detection": "GAP - security_signal/security_finding substrate designed but not deployed at scale",
+    "cc7_2_monitoring": "GAP - no anomaly detection in production",
+    "cc7_3_evaluation": "GAP - no formal incident response evaluation workflow",
+    "cc7_4_incident_response": "PARTIAL - Work Hub tickets serve as informal IR",
+    "cc7_5_recovery": "GAP - no formal recovery testing",
+    "cc8_change_management": "PARTIAL - Claude-prepared idempotent scripts + Jason-executed deploy model is documented",
+    "cc9_1_risk_mitigation": "GAP - Anthropic third-party vendor risk unassessed (no BAA)",
+    "cc9_2_vendor_management": "GAP - vendor risk register not maintained"
+  }
+}
