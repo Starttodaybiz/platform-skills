@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Development
 
-Last updated: Jul 24 2026 — PROD DDL checklist + DEMO/PROD parity discipline added.
+Last updated: Jul 25 2026 — Install Script Pattern v2 locked lessons added.
 
 ## Stack (Current — Softr has been fully removed)
 
@@ -263,6 +263,48 @@ git push origin main
 - Include idempotency check with SKIP path — allows re-running safely
 - Include bracket-balance sanity check before writing to disk
 - Include "verify prior fixes still intact" check to prevent regression
+
+**Locked lessons v2 (Jul 24-25 2026 install script hardening):**
+
+- **Cross-platform base64 decode:** always `base64 -d < file`, NEVER `base64 -d file`.
+  macOS base64 rejects the positional-filename form (`invalid argument`); stdin
+  redirect works on both macOS and Linux. Discovered when yesterday's
+  install_platform_skills_update.sh (v1) failed on Jason's iMac.
+
+- **`grep -c pattern file | grep -q "^0$"` is broken under `set -o pipefail`:**
+  when the first grep finds zero matches, it exits with status 1 even though
+  it prints "0" to stdout. Pipefail catches that and propagates the failure.
+  So a passing check (zero matches confirmed) reports as an ERROR. Correct
+  forms:
+    * `! grep -q "pattern" file && echo "not found"` (idiomatic negation)
+    * `[ "$(grep -c "pattern" file)" = "0" ]` (subshell captures the count)
+  Discovered when L-fix9's "L-fix8 remnants gone" check falsely errored
+  despite Python's forbidden-pattern check having already verified success.
+
+- **SIGPIPE + pipefail interaction:** `git diff | head -100` under pipefail
+  will kill the script when git produces more output than head reads. git
+  gets SIGPIPE on its next write, pipe fails, `set -e` triggers exit. This
+  happened right before the commit step on install_platform_skills_update
+  yesterday — files were correctly patched but the commit never ran. Fixes:
+    * `{ git --no-pager diff X | head -100; } || true` (swallow the failure)
+    * Or drop pipefail for the specific line: `set +o pipefail; ...; set -o pipefail`
+
+- **PostgREST within-period ordering is undefined:** if your ORDER BY has
+  ties, the tie-breaker is arbitrary. Under first-wins dedup, this makes
+  the "winner" effectively random. If you need deterministic dedup, add
+  explicit tiebreaker columns to `order=`. Better: filter to relevant rows
+  BEFORE dedup so any winner is acceptable.
+
+- **Shared-state dedup for context-divergent views (L-fix8→12 case study):**
+  Do NOT solve conflicting per-view winners with a shared dedup that picks
+  one row per key — you'll break whichever view didn't win. Correct pattern:
+    STEP 1: Filter raw source to matching scope
+    STEP 2: Filter to non-null metric FOR THE CURRENT VIEW
+    STEP 3: Sort by key
+    STEP 4: Dedup per key (first-wins within already-filtered set)
+  Each view runs its own STEP 2→4 with its own metric getter. No shared
+  intermediate structure. Full write-up in platform-dev-test-ontology
+  under "Shared-state dedup for context-divergent views".
 
 ---
 

@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Dev Test Ontology
 
-Last updated: Jul 24 2026 — Finance app + session discipline added.
+Last updated: Jul 25 2026 — L-fix9→12 lessons + FF Log C completion + FF Log D opened.
 
 ---
 
@@ -226,10 +226,38 @@ Finance (added Jul 24 2026 from L series lessons)
 
   Financial_Statements — dedup collisions at (Entity, Period_end, Basis):
     Multiple statements can share the same period_end for the same entity
-    and basis family. seriesMap builder must be rank-aware. Prefer the
-    Cash Flow statement (richest data) when multiple share a key. First-wins
-    ordering loses CF statements to Annual/P&L variants.
-    Root-caused Jul 24 2026 as commit 88c2423 (L-fix8).
+    and basis family (e.g. Backbeat Logistics 2024-12-31 has Annual, Annual
+    P&L, AND Cash Flow all at the same date). This CANNOT be solved with
+    shared-state dedup — see "Shared-state dedup for divergent views"
+    below. Correct approach: filter raw stmts per view metric, dedup AFTER
+    filter. Established by L-fix10 (commit 16ed268) after L-fix8 shared
+    dedup regression was caught by sweep-first discipline (L-fix9→12 saga
+    Jul 24-25 2026).
+
+  Shared-state dedup for context-divergent views (L-fix8→12 case study):
+    If multiple UI views need different projections from the same underlying
+    rows, DO NOT solve conflicting winners with a shared dedup that picks
+    one row per key. That pattern breaks whichever view didn't win.
+    Example: L-fix8 preferred Cash Flow rows at dedup so multiSeriesCF
+    would work — but Cash Flow rows have null Total Assets/Liab/Equity, so
+    BS trend collapsed to <=1 point for entities with both statement types.
+    Correct pattern (locked as L-fix10+):
+      STEP 1: Filter raw source to matching scope (entity + basis)
+      STEP 2: Filter to non-null metric FOR THE CURRENT VIEW
+      STEP 3: Sort by key
+      STEP 4: Dedup per key (first-wins within already-filtered set)
+    Each view runs its own STEP 2→4 with its own metric getter. No shared
+    intermediate. In FinanceShell.js this is _buildBsPoints(getter) closure.
+
+  PostgREST within-period ordering is undefined:
+    When multiple rows share a values in ORDER BY columns, PostgREST does
+    NOT guarantee a stable secondary sort. Under first-wins dedup, this
+    means the "winner" is effectively arbitrary — could be any row with
+    the same period_end. Symptom: dedup picks different rows on different
+    deploys without any data change. Discovered during L-fix9 debugging.
+    If you need deterministic first-wins, add explicit tiebreaker to the
+    API's order= clause. If you just need "some row with the metric",
+    use filter-then-dedup (see above).
 
   Financial_Statements — DEMO/PROD schema drift:
     DEMO (tbihmlnqpwdeiethgwaf) has more columns than PROD sometimes carries.
@@ -325,9 +353,16 @@ B1 Professional Network · B2 SHRM Recertification · B3 Start Score™ doc · B
 
 ### FF Log C ✅ (Jul 2026 — Finance)
 C1 Financial Statements type-aware cards (batch K)
-C2 Cash Flow activity breakdown + BS multi-line + CF-aware dedup (batch L series, 8 fixes total)
-C3 PROD Financial_Statements schema parity (Cash, Gross_profit, COGS, Operating_expenses, cf_operating, cf_investing, cf_financing)
+C2 Cash Flow activity breakdown + BS multi-line (batch L series, 12 fixes total closed Jul 24-25)
+  - L-fix1 through L-fix8: sequential BS/CF trend fixes culminating in root-cause CF-aware dedup
+  - L-fix9 through L-fix10: reverted L-fix8 shared-state dedup regression; rebuilt BS/IS/CF trends from raw stmts using filter-then-dedup pattern
+  - L-fix11: 2-line Revenue + Total Expenses chart for IS/P&L cards (definition: Expenses = Revenue - Net Income)
+  - L-fix12: derived Net Income row in MultiLineChartBS tooltip on IS/P&L variant (label-match detection scoped to IS only)
+C3 PROD Financial_Statements schema parity (Cash, Gross_profit, COGS, Operating_expenses, cf_operating, cf_investing, cf_financing) — closed live production bug where PROD customers were getting empty statements arrays
 C4 DocuSign PFS v1 integration (finance app, Jul 23)
+
+### FF Log D 🚧 (Jul 2026 — Finance/Bank consolidation)
+D1 Bank → Finance consolidation Phase 1: PFS reconciliation between finance and bank apps (in progress)
 
 ### Next Phase
 - Bank → Finance consolidation (Phases 1-5, plan drafted Jul 24)
