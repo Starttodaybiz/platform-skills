@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Dev Test Ontology
 
-Last updated: Jul 25 2026 — v4: Phase 1b shipped + 4 install script gotchas locked from Phase 1b iterations.
+Last updated: Jul 25 2026 — v5: Phase 1c enabling schema shipped (Sprints 0.1-0.4) + DocuSign central infrastructure + PFS bank RPCs + 9 new locked lessons.
 
 ---
 
@@ -497,19 +497,137 @@ D2 Bank → Finance consolidation Phase 1b: PFSModal security fix ✅ (Jul 25, b
    - Required 4 install script iterations; 4 locked lessons captured
      (see compliance-platform-development "Locked lessons v3")
 
-D3 Bank → Finance consolidation Phase 1c: Schema consolidation + legacy retirement (planned)
-   - Bank still has TWO PFS write paths after Phase 1b:
-     * Path A: banking.js:save_pfs (secure, writes st_personal_financial_statements)
-     * Path B: /api/pfs/submit-modal (secure post-1b, writes pfs_submissions)
-   - Path A + Path B write to DIFFERENT tables — needs consolidation to a
-     single path against finance's canonical 11-table schema
-   - Design decision needed: bank uses "1 PFS per org" model, finance uses
-     "1 PFS per contact" model. Reconciliation options:
-     * Bank UI gets a contact picker (biggest UX change)
-     * Bank writes to session's primary contact by convention
-     * Introduce org-level PFS as a distinct concept in finance's schema
-   - After consolidation, drop legacy tables st_personal_financial_statements
-     and pfs_submissions (both empty on PROD as of Jul 25)
+D3 Bank → Finance consolidation Phase 1c: Schema consolidation + legacy retirement
+   Design brief locked with 8 approved decisions (see phase_1c_amendment_docusign_platform_v3.md):
+     1. Phase 1c/1d split — 1c enabling schema, 1d orchestration + RON
+     2. DocuSign Notary as primary RON provider
+     3. Both notary models (On-Demand + BYON) in Phase 1
+     4. Option B — compliance app as meta-app, is_compliance_officer_for_org gate
+     5. No Michael approval gate for envelope templates
+     6. CA fallback via in-person scheduling helper (until 2030 RON)
+     7. RON recording mirroring to Supabase Storage in Phase 1
+     8. 25 compliance_owned purposes per approved list
+
+D3.0 Sprint 0.1: Central DocuSign envelope infrastructure schema ✅ (Jul 25)
+     - 8 new tables (121 cols, 34 indexes, RLS on all, matches DEMO baseline):
+       docusign_envelope_purposes, docusign_envelopes, docusign_signers,
+       docusign_envelope_events, docusign_envelope_templates, docusign_campaigns,
+       docusign_notaries, docusign_notary_state_rules
+     - Polymorphic FK pattern: docusign_envelopes(resource_type, resource_id)
+       uses SOFT reference (no DB FK, RPC-validated). Non-polymorphic FKs
+       (envelope_id, signer_id, purpose) get DB-enforced constraints.
+     - PROD advisor: 1734 → 1753 (+19; +8 attributable INFO rls_enabled_no_policy
+       expected pattern matching DEMO baseline)
+
+D3.1 Sprint 0.2: Purpose registry seeded ✅ (Jul 25)
+     - 167 purposes across 12 apps (legal 30, c2c 25, real_estate 20, finance 15,
+       hr 15, compliance 13, sales 12, mylegal 11, insurance 10, marketplace 9,
+       chamber 6, stverify 1)
+     - 25 compliance_owned purposes match approved list exactly:
+       access_request, annual_report, attestation, audit_representation,
+       board_consent, boi_filing, code_of_conduct, compliance_attestation,
+       conflict_of_interest, corp_resolution, dpa, fcpa_certification, i9,
+       kyc_attestation, legal_hold, nda, non_compete, non_solicit_marketplace,
+       policy_acknowledgment, records_retention, regulatory_filing,
+       related_party_disclosure, training_completion, vendor_risk_assessment,
+       whistleblower_ack
+     - 33 requires_notary, 11 attorney_review_gate, 6 executive_review_gate,
+       19 bulk_send_supported
+
+D3.2 Sprint 0.3: Core DocuSign RPCs ✅ (Jul 25)
+     Four RPCs, all SECURITY DEFINER with search_path = public,pg_temp,
+     REVOKE PUBLIC + GRANT service_role:
+     - create_docusign_envelope(...) — atomic envelope + signers, validates
+       purpose registry, enforces minimum_signers via check_violation
+     - record_docusign_event(...) — webhook receiver, idempotent (returns NULL
+       for unknown envelope), captures ip_address/user_agent/signature_hash
+       from payload
+     - list_envelopes_for_resource(...) — read helper with signer counts +
+       progress
+     - is_compliance_officer_for_org(...) — Phase 1d permission gate (STUB
+       returns false in 1c)
+     End-to-end smoke tested on DEMO: create → sent → delivered →
+     recipient-completed → envelope-completed. Status transitioned correctly,
+     4 events logged in order, signer.status='signed' with IP captured. Edge
+     cases verified: unknown purpose raises foreign_key_violation, below-min
+     signers raises check_violation with atomicity, unknown envelope returns
+     NULL. CASCADE FK integrity confirmed on cleanup.
+
+D3.3 Sprint 0.4: PFS schema consolidation ✅ (Jul 25, with correction)
+     Schema changes:
+     - Added pfs_versions.envelope_id uuid REFERENCES docusign_envelopes ON
+       DELETE SET NULL (partial index ix_pfs_versions_envelope)
+     - INITIAL VERSION dropped 6 legacy inline docusign_* columns from
+       pfs_versions
+     - CORRECTION (Jul 25 same session): restored the 6 legacy columns because
+       finance's deployed DocuSign Platform V1 (Jul 23 iterations 3.1a-3.1e)
+       still writes to them. Dual-write pattern until Sprint 0.5 refactor
+       ships and finance stops writing legacy columns.
+     - Backfilled 1 DEMO envelope (Eddie Van Shredder, Bowie-Stardust) into
+       central tables with metadata.backfilled=true,
+       received_from='phase_1c_backfill'
+     - PROD safety check confirmed 0 rows with legacy data before any DDL
+
+     Three Bank PFS RPCs shipped (with one signature_method fix mid-flight):
+     - resolve_bank_contact_for_org(org_id) → uuid — Phase 1c heuristic:
+       first non-deleted Contact by "Contacts_id" sort. Full contact-picker
+       UX is Phase 1c+.
+     - save_pfs_from_bank(...) → jsonb — atomic write, 4 line-item tables,
+       auto-increments version_number, updates active_version_id. Enforces
+       CHECK constraints: signature_method ∈ {NULL,'attestation','docusign'},
+       ownership_pct ∈ (0.0, 1.0], sba_category strictly enumerated per
+       type.
+     - get_pfs_for_bank(contact_id) → jsonb — read active version + all
+       lines + computed totals (assets, liabilities, net_worth,
+       annual_income, contingent).
+     End-to-end smoke tested on DEMO (Eddie Van Shredder): saved version 3
+     with 8 line items. Totals verified: assets 2.735M, liabilities 1.302M,
+     net worth 1.433M, income 430K, contingent 850K.
+
+D3.4 Sprint 0.5: App refactors (pending — requires finance + bank repos on iMac)
+     1. Finance webhook (app/api/pfs/docusign-webhook/route.js) → add
+        record_docusign_event(docusign_envelope_id, event_type, payload,
+        signer_email) call alongside existing legacy sbPatch write
+        (dual-write pattern)
+     2. Finance PFS envelope creation → add create_docusign_envelope(...)
+        call alongside existing pfs_versions.docusign_* INSERT (dual-write),
+        then UPDATE pfs_versions.envelope_id with returned uuid
+     3. Bank banking.js:save_pfs handler (line 565-644) → refactor to call
+        save_pfs_from_bank RPC. Requires flat-to-line-items translation on
+        server side (maps 9 asset fields / 7 liability fields / 5 income
+        fields to correct sba_category values per line item).
+     4. Bank banking.js:section=='pfs' read (line 249-259) → call
+        get_pfs_for_bank(session_contact_id) instead of direct
+        st_personal_financial_statements read
+     5. Bank pages/api/pfs/submit-modal.js (Phase 1b commit 13ad57b) →
+        route to save_pfs_from_bank RPC instead of pfs_submissions insert
+     6. Bank pages/api/index-overview.js line 92 → replace
+        pfs_submissions query with personal_financial_statements JOIN
+     7. (Optional) Migrate PROD pfs_submissions row (Eddie Van Shredder,
+        d0000000-...-01, 4.25M assets) → personal_financial_statements +
+        pfs_versions + line items. Requires creating an Eddie Contact on
+        PROD (Bowie-Stardust has 0 Contacts on PROD currently). Recommend
+        deferring to Sprint 0.6 with pfs_submissions drop.
+
+D3.5 Sprint 0.6: Cleanup (pending — after Sprint 0.5 verified in production)
+     1. Verify PFS end-to-end on DEMO with non-demo test account
+     2. DROP legacy tables on DEMO: st_personal_financial_statements,
+        pfs_submissions
+     3. DROP legacy pfs_versions.docusign_* columns on DEMO + PROD (safe
+        once finance stops writing them via Sprint 0.5)
+     4. PROD table drop deferred until confidence period passes
+
+D3 Phase 1c current status: enabling schema fully shipped, code refactors
+   awaiting finance + bank repo access on Jason's iMac. All Sprint 0.1-0.4
+   migrations idempotent and DEMO/PROD parity verified.
+
+### Phase 1d (planned ~28-35h)
+- Sprint 1 (~8h): Compliance orchestration RPCs + Compliance_Items.envelope_id FK
+- Sprint 2 (~10h): RON Model A (DocuSign Notary On-Demand) + state_rules
+  seeded for 50 states + DC + CA fallback
+- Sprint 3 (~10h): RON Model B (BYON) + MJS Law notary onboarding + recording
+  mirroring to Supabase Storage
+- Sprint 4 (~6h): Envelope templates + compliance dashboards + SLA escalation
 
 ### Next Phase
 - Bank → Finance consolidation (Phases 1-5, plan drafted Jul 24)
@@ -556,3 +674,183 @@ D3 Bank → Finance consolidation Phase 1c: Schema consolidation + legacy retire
 - Financial_Statements Schema Ontology entry added
 - Security baseline reframed as rolling snapshot
 - FF Log C section added
+
+**Jul 25 2026 — Phase 1c enabling schema (nine locked lessons + one near-miss):**
+
+Near-miss caught mid-session: **premature column drop while deployed app still writes to them.**
+Sprint 0.4a's initial migration dropped 6 legacy `pfs_versions.docusign_*` columns
+in the same transaction as adding the new central `envelope_id` FK. Finance's
+DocuSign Platform V1 (deployed Jul 23 iterations 3.1a-3.1e) was still writing
+to those columns via its webhook handler. Next webhook would have 500'd with
+"column does not exist". Caught before Sprint 0.5 started; rolled forward with
+column restoration + backfill from central envelope, establishing the **dual-write
+window pattern**. Lesson locked as #TC-017 below.
+
+**Nine new locked lessons for skills v5:**
+
+L23. **CHECK constraint discovery is mandatory before RPC write path design.**
+     Sprint 0.4 hit two constraint failures mid-smoke-test:
+     - `pfs_versions.signature_method` allows only NULL / 'attestation' / 'docusign'
+       — my RPC default of 'bank_electronic' was rejected
+     - `pfs_asset_lines.ownership_pct` is (0.0, 1.0] fractional, NOT 0-100 percentage
+       — my test data 100 was rejected  
+     - `pfs_*_lines.sba_category` strictly enumerated per line-item type
+       — my test 'cash'/'mortgage'/'business' values were all invalid
+     **Rule:** query `pg_constraint WHERE conrelid = 'table'::regclass AND contype='c'`
+     BEFORE designing INSERT-shape RPCs, not after test failures.
+
+L24. **Polymorphic FK design pattern (docusign_envelopes case study).**
+     `docusign_envelopes(resource_type, resource_id)` uses SOFT reference
+     (no DB FK); type varies (pfs_versions, deals, engagements, etc.). Enforced
+     at RPC layer via `create_docusign_envelope`. Non-polymorphic FKs
+     (envelope_id → envelopes, signer_id → signers, purpose → purposes)
+     get DB-enforced constraints. Cross-app soft-ref pattern: contact_id,
+     initiated_by_compliance_item_id, campaign_id, created_by_contact_id
+     do NOT get DB FKs (cross-app cardinality varies).
+
+L25. **RPC idempotency for webhooks: return NULL, don't RAISE.**
+     `record_docusign_event` returns NULL when envelope not found rather than
+     raising foreign_key_violation. Why: DocuSign retries webhook calls
+     aggressively on 4xx/5xx. Raising means retries fail forever. Returning
+     NULL means "we got it, nothing to do" and DocuSign moves on.
+     Applies to any webhook-receiver RPC.
+
+L26. **Backfill migration metadata pattern.** When migrating existing rows
+     into new central tables, insert with:
+     - `metadata->>'backfilled' = true`
+     - `metadata->>'backfill_source' = 'source description'`
+     - `metadata->>'backfill_migration' = migration_name`
+     - `metadata->>'backfill_date' = now()`
+     - `received_from = 'phase_XX_backfill'` (distinct from 'docusign_webhook')
+     - Preserve original timestamps in sent_at/completed_at (not now())
+     Enables later filtering: `WHERE received_from = 'docusign_webhook'`
+     for real events vs backfill.
+
+L27. **Purpose registry as centralized policy driver.** Instead of scattering
+     `if purpose == 'x' then require_notary else ...` logic across app code,
+     store all policy metadata on the purpose row itself:
+     `requires_notary, requires_witness_count, minimum_signers,
+     attorney_review_gate, executive_review_gate, compliance_owned,
+     bulk_send_supported, recurring_supported, state_specific_notary,
+     retention_years`. The RPC (`create_docusign_envelope`) looks up the
+     purpose row and applies defaults. Adding a new purpose = INSERT one
+     row; no code changes. 167 purposes shipped Jul 25.
+
+L28. **Compliance-owned purpose gate (Option B locked).** Purposes flagged
+     `compliance_owned=true` (25 total) require an authorized compliance
+     officer to initiate the envelope on behalf of a target org. The
+     `is_compliance_officer_for_org(caller_contact_id, target_org_id)`
+     RPC is the single gate. Phase 1c stub returns false (compliance app
+     doesn't exist yet); Phase 1d Sprint 1 replaces with real check
+     against User_Entity_Access + compliance role.
+
+L29. **Bowie-Stardust asymmetry between DEMO and PROD.** DEMO has 31 Contacts
+     tied to Bowie-Stardust org (d0000000-0000-0000-0000-000000000001).
+     PROD has 0 Contacts tied to that org — only the Organizations row and
+     a legacy pfs_submissions row with `guarantor_name='Eddie Van Shredder'`
+     (no contact_id column in that table's schema). Any migration touching
+     "Eddie's PROD contact" must FIRST create the Contact row. This
+     asymmetry surfaces when moving demo flows to production for the first
+     time.
+
+L30. **Airtable-origin Contacts schema quirks (reconfirmed).** No `created_at`
+     column exists on `Contacts`. Use `"Contacts_id"` (quoted, mixed-case)
+     for stable ordering when a chronological signal isn't available.
+     Column names: `"First Name"`, `"Last Name"`, `"Email"`, `"Contacts_id"`
+     all quoted mixed-case. Timestamp columns available: `deleted_at`,
+     `archived_at`, `address_verified_at`. NO `created_at`.
+
+L31. **Multi-statement gotcha reconfirmed for CREATE FUNCTION migrations.**
+     `execute_sql` returns only the last result set. When running multiple
+     `SELECT public.some_rpc(...)` calls in one query for smoke tests, only
+     the last return value is visible. Split into separate calls, or use
+     `WITH t1 AS (SELECT ...), t2 AS (SELECT ...) SELECT * FROM t1, t2`.
+     `RAISE NOTICE` inside DO blocks doesn't appear in the query result —
+     use RETURN-value patterns to verify PL/pgSQL branch execution.
+
+**New TC in the Test Case Registry:**
+
+TC-017: **Deployed-app column-drop guard.** Before dropping any column from
+a table that a deployed app writes to, verify no live code writes to that
+column via grep across all deployed repos. Prefer additive-then-drop
+(add new mechanism, dual-write for a period, then drop legacy). Sprint 0.4
+correction was: initial migration dropped 6 pfs_versions.docusign_* columns
+same-transaction; rolled forward with restoration migration and dual-write
+window pattern.
+
+**Jul 25 2026 — Phase 1c Sprint 0.5 ship (five more locked lessons):**
+
+L32. **Git push success ≠ Vercel deploy success.** After every commit to a
+     Vercel-connected repo, verify deploy state via
+     `Vercel:list_deployments` (or the dashboard). If it says ERROR, don't
+     assume "shipped." Phase 1b commit 13ad57b was believed shipped for
+     two weeks — in reality its Vercel deploy ERROR'd and prod continued
+     serving the previous good build (b9026ba4, Jul 8 CVE bump). The
+     userMemories "Phase 1b shipped" reflected git push completing, not
+     production actually running the code. **Rule:** after any commit
+     to a deployed repo, poll Vercel state and only mark the sprint
+     shipped once state=READY. Applies especially to install-script
+     driven changes where local success feels like ship-completion.
+
+L33. **`@/` path alias in Next.js requires jsconfig.json or tsconfig.json.**
+     Not implicit. Bank repo had no `jsconfig.json`, no `tsconfig.json`,
+     and no webpack alias config in `next.config.js` — so
+     `import x from '@/lib/supabase'` failed at build time with
+     "Module not found." Before writing `@/foo` imports in any repo,
+     grep for existing `@/` usage: if none exists AND no jsconfig,
+     the alias isn't wired. Use relative imports instead
+     (`../../../lib/supabase` from `pages/api/pfs/submit-modal.js`).
+     Applies to any Next.js repo in the Start Today ecosystem — some
+     have jsconfig (finance does), some don't (bank doesn't).
+
+L34. **macOS `sha256sum` doesn't exist — use `shasum -a 256`.** Any
+     install script that runs on Jason's Mac needs a portable wrapper:
+     ```
+     sha256() {
+       if command -v sha256sum >/dev/null 2>&1; then
+         sha256sum "$@" | awk '{print $1}'
+       elif command -v shasum >/dev/null 2>&1; then
+         shasum -a 256 "$@" | awk '{print $1}'
+       else
+         echo "ERROR: no sha256 tool found" >&2; exit 1
+       fi
+     }
+     ```
+     Same pattern applies for GNU-vs-BSD tool differences: `sed -i`
+     (macOS wants `sed -i ''`), `base64 -w0` (macOS `base64` has no
+     `-w`), `date -d` vs `date -f`, `readlink -f` (macOS needs
+     `coreutils`' `greadlink`), `find -printf` (BSD find lacks it).
+
+L35. **Zsh treats `#` as a literal, not a comment, in interactive
+     copy-paste blocks.** Terminal instructions given to Jason must
+     not include inline `# comment` lines — they get interpreted as
+     arguments and cause "command not found: #" or "cd: too many
+     arguments." Two safe patterns: (a) put comments as full lines
+     starting with `#` (works because zsh sees them at line start
+     as a no-op), or (b) omit comments entirely and split multi-step
+     sequences into separate code blocks with prose explanation
+     between. Also: `ls -d finance* bank*` with globbing in zsh will
+     fail with "no matches found" if no matches; use `2>/dev/null` or
+     `setopt NULL_GLOB` if silent-no-match is desired.
+
+L36. **Install scripts must be tested on the target OS, not just the
+     sandbox.** Linux-tested doesn't mean macOS-safe. Sprint 0.5
+     installers passed every Linux sandbox test but failed on Jason's
+     Mac at the very first `sha256sum` call — before touching a single
+     file. Mitigation: simulate the target env via `PATH` restriction:
+     create a fake `/tmp/mac_bin_only/` with only `shasum` (aliased to
+     the BSD tool), then run installer with restricted `PATH`. Catches
+     the class of bugs where a build works because a tool exists on
+     Linux that isn't present on macOS (or vice versa).
+
+**Additional TC in the Test Case Registry:**
+
+TC-018: **Post-commit Vercel deploy verification.** After every commit
+that touches app code (any repo with a Vercel integration), immediately
+call `Vercel:list_deployments` and inspect the newest entry's `state`.
+If state is BUILDING, wait 60-120s and re-poll. If state is ERROR,
+call `Vercel:get_deployment_build_logs errorsOnly=true` to identify
+the failure. Do not consider the sprint shipped until state=READY on
+a deploy that carries the target commit SHA. Applies especially when
+multiple commits land in quick succession — check that the final
+deploy corresponds to the intended commit.

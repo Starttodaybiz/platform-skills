@@ -356,6 +356,72 @@ should assert what your patch DOES (unique strings appear, forbidden
 strings absent), not what the file/repo LOOKS LIKE structurally. The
 structural assumptions get subtle wrong faster than the specific ones.
 
+**Locked lessons v4 (Jul 25 2026 Sprint 0.5 hotfix):**
+
+Sprint 0.5 shipped in 3 commits over ~90 minutes. Two failure modes
+that cost time and would repeat next session if not captured:
+
+- **Portable sha256 wrapper is mandatory for any Mac-facing installer.**
+  macOS has `shasum -a 256`; Linux has `sha256sum`. Every install script
+  Jason runs from his iMac needs this preamble:
+  ```
+  sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum "$@" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+      shasum -a 256 "$@" | awk '{print $1}'
+    else
+      echo "ERROR: no sha256 tool found" >&2; exit 1
+    fi
+  }
+  ```
+  Then everywhere you'd use `sha256sum "$f" | awk '{print $1}'`, call
+  `sha256 "$f"`. Same pattern for `base64` (macOS BSD has no `-w0`,
+  but the default line-wrapped output actually parses fine — no fix
+  needed for base64 encode). `sed -i` on macOS wants an empty backup
+  arg: `sed -i '' 's/x/y/'` — Linux tolerates just `sed -i 's/x/y/'`.
+  When in doubt, test the installer with a mock-macOS PATH:
+  ```
+  mkdir -p /tmp/mac_bin && ln -sf /usr/bin/shasum /tmp/mac_bin/shasum
+  PATH=/tmp/mac_bin bash install_foo.sh .
+  ```
+
+- **Post-commit Vercel deploy verification is not optional.** Git push
+  success ≠ prod running the new code. After every commit that touches
+  app code, immediately call `Vercel:list_deployments` and check
+  `state`. If state=ERROR, call `Vercel:get_deployment_build_logs
+  errorsOnly=true`. Only mark a sprint shipped when a Vercel deploy
+  carrying the target commit SHA reaches state=READY. Sprint 0.5
+  discovery: bank Phase 1b commit `13ad57b` (Jul 24) had been believed
+  shipped for ~2 weeks — in reality every subsequent commit to bank
+  main was inheriting a build error from that commit's `@/lib/supabase`
+  import against a repo with no `jsconfig.json`. Prod continued serving
+  the previous good build (b9026ba4, Jul 8) all that time. Two weeks
+  of "deployed" code that never reached production.
+
+- **`@/` path alias in Next.js requires jsconfig.json or tsconfig.json.**
+  Not implicit. Before writing `@/foo` imports in any Next.js repo,
+  check:
+  ```
+  ls jsconfig.json tsconfig.json 2>/dev/null
+  grep -rn "from '@/" --include="*.js" --include="*.jsx" .
+  ```
+  If no config file AND no existing `@/` usage, the alias isn't wired
+  — use a relative import instead. Finance has jsconfig.json; bank
+  does not. When adding cross-file imports in bank, always relative:
+  `../../../lib/supabase` from `pages/api/pfs/submit-modal.js`.
+
+- **Terminal instructions for Jason must be zsh-safe.** Zsh treats `#`
+  as a literal in interactive contexts unless `interactivecomments`
+  is set. Copy-paste blocks with inline `# comment` produce
+  "command not found: #" errors. Two safe styles:
+  (a) code-only blocks with NO comments, prose between,
+  (b) full-line `#` comments (still fragile — Jason's zsh occasionally
+      objects; prefer style (a) for anything he'll actually run).
+  Also: `ls foo* bar*` with globbing in zsh errors with "no matches
+  found" when nothing matches. Add `2>/dev/null` or use `setopt
+  NULL_GLOB` if you want silent no-match.
+
 ---
 
 ## Auth Pattern
