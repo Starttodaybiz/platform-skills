@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Development
 
-Last updated: Jul 25 2026 — v3: bank app added to deployment manifest, PFS PROD alignment case study incorporated.
+Last updated: Jul 25 2026 — v4: Install Script Pattern v3 lessons added (4 new gotchas from Phase 1b iterations).
 
 ## Stack (Current — Softr has been fully removed)
 
@@ -306,6 +306,55 @@ git push origin main
   Each view runs its own STEP 2→4 with its own metric getter. No shared
   intermediate structure. Full write-up in platform-dev-test-ontology
   under "Shared-state dedup for context-divergent views".
+
+**Locked lessons v3 (Jul 25 2026 Bank Phase 1b iterations):**
+
+Phase 1b took 4 install script iterations (v1→v2→v3→v4) to complete a
+simple 2-file patch (new API route + one function replacement). Each
+iteration failed on a defensive check that was over-strict or unsafe
+for the file type being patched. All four lessons apply to any future
+install script:
+
+- **Verify only on strings unique to the patch, not common language idioms.**
+  v1 asserted `credentials: "include"` appeared exactly once — but that
+  string is a common fetch pattern and appeared elsewhere in the file.
+  Correct: assert on comment markers with dates (`Phase 1b Jul 25 2026`),
+  fully-qualified endpoint paths (`"/api/pfs/submit-modal"`), config values,
+  or anything genuinely unique to the patch you're applying. Never key on
+  syntax idioms like `useState`, `Content-Type`, `credentials`, `POST`,
+  `async function`, etc.
+
+- **Never assume file-form vs directory-form untracked git output.**
+  v2's "clean tree" precondition expected `?? path/to/file.ext` (file form)
+  but git returned `?? path/to/` (directory form) because the entire
+  directory was new. Both are valid git output; a strict regex will trip
+  false-positive on the wrong one. Correct: don't gate on `git status`
+  output structure — see next lesson.
+
+- **Preconditions should check what the script REQUIRES, not incidental
+  tree state.** If the script only writes files A and B, assert only that
+  (a) file A doesn't already exist in the "already-applied" state and
+  (b) file B doesn't have the unique-marker of a prior run. Don't demand
+  the whole tree be pristine. `git add <specific paths>` cannot sweep
+  up unrelated changes, so worrying about other uncommitted work is
+  over-defensive.
+
+- **Naive character-count bracket balance is unsafe for JS/JSX files.**
+  v3's check did `src.count('(') vs src.count(')')`. But JavaScript files
+  have brackets in contexts where they're NOT syntactic pairs:
+    * regex literals: `/[$,]/g` — the `[` and `]` are regex character-class
+    * JSX interpolation: `<div>{value}</div>` — the `{` and `}` are JSX
+    * template literals: `` `Hello ${name}` `` — `${` opens an interpolation
+    * object destructuring in comments: `// { a, b } = obj`
+    * strings containing brackets: `"literally has ( in it"`
+  If defensive-checking a patch on JS/JSX, either drop bracket balance
+  entirely or use a proper AST parser. String checks (unique markers,
+  endpoint paths, forbidden patterns) are stronger and simpler.
+
+**General install script principle from all these:** defensive checks
+should assert what your patch DOES (unique strings appear, forbidden
+strings absent), not what the file/repo LOOKS LIKE structurally. The
+structural assumptions get subtle wrong faster than the specific ones.
 
 ---
 

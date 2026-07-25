@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Dev Test Ontology
 
-Last updated: Jul 25 2026 — v3: PFS PROD alignment case study + bank/finance dual-implementation finding + Phase 1 discovery.
+Last updated: Jul 25 2026 — v4: Phase 1b shipped + 4 install script gotchas locked from Phase 1b iterations.
 
 ---
 
@@ -128,9 +128,10 @@ Every Claude session doing platform work MUST follow these steps. Historical fai
 |-------|---------|-------------|-------------------|
 | `/banking` | Treasury dashboard | `st_personal_financial_statements` (LEGACY) + Loans + related | Migrate to `/finance/pfs` + `/finance/treasury` |
 | `/banking/comms` | Communications | Various | Migrate to `/finance/comms` |
-| Direct PostgREST | `pfs_submissions` write from `pages/index.jsx:5799` | Client-side | **SECURITY ISSUE**: migrate behind API route in Phase 1b |
+| `/api/pfs/submit-modal` (server-side, Jul 25) | PFSModal submission (Path B, now secure) | `pfs_submissions` via service_role client, session org_id | Consolidate with Path A in Phase 1c |
+| `banking.js:save_pfs` (server-side, existing) | PFS write from bank dashboard (Path A) | `st_personal_financial_statements` via service_role client | Consolidate with Path B in Phase 1c |
 
-Bank app package name: `banking-treasury-portal`. Uses `st_personal_financial_statements` (SBA Form 413-style single-table) and `pfs_submissions` (DocuSign envelope). Both are LEGACY relative to finance's newer schema. Slated for retirement in Phase 1c after bank UI migrates in Phase 1b.
+Bank app package name: `banking-treasury-portal`. Uses `st_personal_financial_statements` (SBA Form 413-style single-table) and `pfs_submissions` (DocuSign envelope). Both are LEGACY relative to finance's newer schema. Slated for retirement in Phase 1c after schema consolidation.
 
 ### Modal Write-Backs (all tested ✅)
 
@@ -468,6 +469,10 @@ C4 DocuSign PFS v1 integration (finance app, Jul 23)
 
 D1 Bank → Finance consolidation Phase 1a: PROD PFS schema alignment ✅ (Jul 25)
    - Migrated 11 PFS tables from DEMO to PROD via `add_missing_pfs_tables_v1`
+   - Follow-up: `add_missing_pfs_tables_v1_enable_rls` — RLS enabled on all
+     11 tables to match DEMO's locked-down state (0 policies, service_role
+     only). Missed in v1, caught by TC-016 advisor delta check (+11 ERROR
+     findings after v1, resolved to +0 after RLS enable).
    - Closed live production bug: finance's /api/pfs was 400-erroring silently
      because `personal_financial_statements`, `pfs_versions`, `pfs_asset_lines`,
      `pfs_liability_lines`, `pfs_income_lines`, `pfs_contingent_liability_lines`,
@@ -476,21 +481,35 @@ D1 Bank → Finance consolidation Phase 1a: PROD PFS schema alignment ✅ (Jul 2
    - Also created `pfs_search_contacts` RPC and 17 indexes
    - Zero data disruption (all tables were empty on both sides)
 
-D2 Bank → Finance consolidation Phase 1b: Bank UI migration (next session)
-   - Bank uses LEGACY tables `st_personal_financial_statements` (34 cols, SBA
-     Form 413 columns) and `pfs_submissions` (DocuSign envelope) — both exist
-     on PROD, bank works today
-   - Finance uses NEW 11-table set with versioning, granular access, sharing,
-     audit log — the better design
-   - Need to migrate bank/pages/api/banking.js (lines 250 and 613) and
-     bank/pages/api/index-overview.js (line 92) from legacy to new schema
-   - Bank/pages/index.jsx:5799 does direct client-side PostgREST calls to
-     `pfs_submissions` — SECURITY anti-pattern, migrate behind API route
+D2 Bank → Finance consolidation Phase 1b: PFSModal security fix ✅ (Jul 25, bank commit 13ad57b)
+   - NEW pages/api/pfs/submit-modal.js: server-side API route replacing the
+     insecure client-side POST at pages/index.jsx PFSModal.handleComplete
+   - Fixes 3 security issues on Path B (Onboarding PFSModal):
+     * anon key was being used as user auth (NEXT_PUBLIC_SUPABASE_ANON_KEY
+       in both apikey and Authorization headers — browser-exposed)
+     * hardcoded Bowie-Stardust demo org_id in POST body (real users' SBA
+       413 data was cross-tenanting into demo org)
+     * bypassed server-side validation
+   - Multi-cookie session resolution matching banking.js pattern exactly
+     (st_auth / st_bank_client / st_bank_session)
+   - Uses getServiceClient() from lib/supabase.js for server-side writes
+   - Same write target (pfs_submissions) — no schema change in 1b
+   - Required 4 install script iterations; 4 locked lessons captured
+     (see compliance-platform-development "Locked lessons v3")
 
-D3 Bank → Finance consolidation Phase 1c: Retire legacy PFS tables
-   - Deprecate `st_personal_financial_statements` and `pfs_submissions`
-   - Data migration (both empty on PROD as of Jul 25, easy) or one-way sync
-   - Drop tables after bank UI cutover
+D3 Bank → Finance consolidation Phase 1c: Schema consolidation + legacy retirement (planned)
+   - Bank still has TWO PFS write paths after Phase 1b:
+     * Path A: banking.js:save_pfs (secure, writes st_personal_financial_statements)
+     * Path B: /api/pfs/submit-modal (secure post-1b, writes pfs_submissions)
+   - Path A + Path B write to DIFFERENT tables — needs consolidation to a
+     single path against finance's canonical 11-table schema
+   - Design decision needed: bank uses "1 PFS per org" model, finance uses
+     "1 PFS per contact" model. Reconciliation options:
+     * Bank UI gets a contact picker (biggest UX change)
+     * Bank writes to session's primary contact by convention
+     * Introduce org-level PFS as a distinct concept in finance's schema
+   - After consolidation, drop legacy tables st_personal_financial_statements
+     and pfs_submissions (both empty on PROD as of Jul 25)
 
 ### Next Phase
 - Bank → Finance consolidation (Phases 1-5, plan drafted Jul 24)
