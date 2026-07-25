@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Development
 
-Last updated: Jul 25 2026 — Install Script Pattern v2 locked lessons added.
+Last updated: Jul 25 2026 — v3: bank app added to deployment manifest, PFS PROD alignment case study incorporated.
 
 ## Stack (Current — Softr has been fully removed)
 
@@ -33,6 +33,7 @@ Last updated: Jul 25 2026 — Install Script Pattern v2 locked lessons added.
 | Attorney | legal.starttoday.biz | prj_sczZV0Y6EmonWmfHZSxttTwbXZCs | Starttodaybiz/attorney-dashboard |
 | STVerify | stverify.starttoday.biz | prj_m8gd7DrEpLLoydfG4jDQvmAlAlSM | Starttodaybiz/stverify |
 | Finance | finance.starttoday.biz | prj_etyUAsXqQD6aqD8kmeU3rfE6TxeD | Starttodaybiz/finance |
+| Bank (treasury) | bank.starttoday.biz | prj_pbqQ7003ZUEPFxTh6rv1YM9x79mq | Starttodaybiz/bank |
 
 **Team ID:** `team_7hbKJDeZuvbjZ7aTxXxUnFv4`
 **Git identity:** `Starttodaybiz <Starttodaybiz@users.noreply.github.com>` (finance) or `j@starttoday.biz` (HR/legacy)

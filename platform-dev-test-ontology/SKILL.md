@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Dev Test Ontology
 
-Last updated: Jul 25 2026 — L-fix9→12 lessons + FF Log C completion + FF Log D opened.
+Last updated: Jul 25 2026 — v3: PFS PROD alignment case study + bank/finance dual-implementation finding + Phase 1 discovery.
 
 ---
 
@@ -64,6 +64,7 @@ Every Claude session doing platform work MUST follow these steps. Historical fai
 | Attorney | legal.starttoday.biz | prj_sczZV0Y6EmonWmfHZSxttTwbXZCs | Starttodaybiz/attorney-dashboard |
 | STVerify | stverify.starttoday.biz | prj_m8gd7DrEpLLoydfG4jDQvmAlAlSM | Starttodaybiz/stverify |
 | Finance | finance.starttoday.biz | prj_etyUAsXqQD6aqD8kmeU3rfE6TxeD | Starttodaybiz/finance |
+| Bank (treasury) | bank.starttoday.biz | prj_pbqQ7003ZUEPFxTh6rv1YM9x79mq | Starttodaybiz/bank |
 
 **Team ID:** `team_7hbKJDeZuvbjZ7aTxXxUnFv4`
 **Git identity:** `Starttodaybiz <Starttodaybiz@users.noreply.github.com>`
@@ -106,7 +107,7 @@ Every Claude session doing platform work MUST follow these steps. Historical fai
 | Entities | `/dashboard/entities` | `/api/data?tab=entities` | ✅ |
 | Compliance Items | `/dashboard/compliance` | `/api/data?tab=compliance` | ✅ |
 | Deployment Studio | `/dashboard/deployment` | RPC-based | ✅ |
-| PFS (DocuSign v1) | `/dashboard/pfs` | DocuSign API + PROD | ✅ |
+| PFS | `/dashboard/pfs` | `/api/pfs` route → 11 PFS tables + `pfs_search_contacts` RPC + DocuSign envelopes | ✅ (PROD alignment closed Jul 25) |
 
 **Financial Statements card variants** (locked Jul 23 2026 via batches K, L, L.fix1–8):
 - **Balance Sheet**: Total Assets / Liabilities / Equity tiles + Capital Structure bar + 3-line Assets/Liab/Equity trend
@@ -117,8 +118,19 @@ Every Claude session doing platform work MUST follow these steps. Historical fai
 **TrendModal drill-in** (locked Jul 23 2026):
 - BS: 3-line MultiLineChartBS with Total Assets navy, Total Liabilities amber, Total Equity green. Modal title 'Balance Sheet'.
 - CF: 3-line MultiLineChartBS with Operating CF green, Investing CF amber, Financing CF navy. Modal title 'Cash Flow'.
-- IS: single-line Revenue chart with crosshair. Modal title 'Revenue'.
-- Modal title is driven by `trendCfg.metric`, NOT `trendCfg.label`. The `.label` drives the card body caption ("ASSETS TREND", "CASH TREND", "REVENUE TREND").
+- IS: 2-line MultiLineChartBS with Revenue green, Total Expenses amber (L-fix11). Tooltip includes derived Net Income row (L-fix12). Modal title 'Revenue'.
+
+### Bank — bank.starttoday.biz (treasury portal, pre-consolidation)
+
+**Status: scheduled for consolidation into finance** (Bank Consolidation Phase 1, in progress Jul 25 2026)
+
+| Route | Purpose | Data Source | Consolidation Plan |
+|-------|---------|-------------|-------------------|
+| `/banking` | Treasury dashboard | `st_personal_financial_statements` (LEGACY) + Loans + related | Migrate to `/finance/pfs` + `/finance/treasury` |
+| `/banking/comms` | Communications | Various | Migrate to `/finance/comms` |
+| Direct PostgREST | `pfs_submissions` write from `pages/index.jsx:5799` | Client-side | **SECURITY ISSUE**: migrate behind API route in Phase 1b |
+
+Bank app package name: `banking-treasury-portal`. Uses `st_personal_financial_statements` (SBA Form 413-style single-table) and `pfs_submissions` (DocuSign envelope). Both are LEGACY relative to finance's newer schema. Slated for retirement in Phase 1c after bank UI migrates in Phase 1b.
 
 ### Modal Write-Backs (all tested ✅)
 
@@ -195,6 +207,68 @@ Entities                — Entities_id, org_id, Entity_legal_name, sos_source_s
                           sos_good_standing, EIN, sos_formation_date, sos_entity_type
 Compliance_Items        — Brief Description, Due_date, Status, G_Compliance_Item_type
 Score_Card              — org_id, Start_score, "Score Band", "Risk Flags", "Overdue Count"
+
+PFS Schema (finance app, 11 tables, PROD-aligned Jul 25 2026)
+
+  personal_financial_statements (7 cols) — header:
+    pfs_id (uuid PK), contact_id (uuid, NOT NULL UNIQUE), spouse_contact_id (uuid),
+    status ('draft'|'active'|'archived'), active_version_id (uuid FK→pfs_versions, DEFERRABLE),
+    created_at, updated_at
+
+  pfs_versions (20 cols) — revision history + DocuSign:
+    version_id (uuid PK), pfs_id (uuid FK ON DELETE CASCADE), version_number (int),
+    effective_date (date), status ('draft'|'reviewed'|'signed'|'shared'|'superseded'),
+    signed_at, signed_by_contact_id, signature_method ('attestation'|'docusign'),
+    attestation_text, docusign_envelope_id, docusign_envelope_status, docusign_envelope_uri,
+    docusign_completed_at, docusign_signer_contact_id (FK→Contacts), docusign_sent_at,
+    signed_pdf_path, prepared_by_contact_id, notes, created_at, updated_at
+    UNIQUE (pfs_id, version_number)
+
+  pfs_asset_lines — SBA Form 413 asset line items (16 cols)
+    sba_category IN (cash_on_hand|savings|ira_retirement|accounts_receivable|
+      life_insurance_csv|stocks_bonds|real_estate|automobiles|other_personal_property|other_assets)
+    fair_market_value, cost_basis, ownership_pct (0<x≤1), joint_held, supporting_doc_ids uuid[]
+
+  pfs_liability_lines — SBA Form 413 liability line items (19 cols)
+    sba_category IN (accounts_payable|notes_payable|installment_auto|installment_other|
+      loan_life_insurance|mortgages_real_estate|unpaid_taxes|other_liabilities)
+    current_balance, monthly_payment, interest_rate_pct, maturity_date,
+    linked_asset_line_id (FK→pfs_asset_lines ON DELETE SET NULL)
+
+  pfs_income_lines — SBA Form 413 income (12 cols)
+    sba_category IN (salary|net_investment_income|real_estate_income|other_income)
+    annual_amount, source_entity_id, ownership_pct, joint_held
+
+  pfs_contingent_liability_lines — contingent liabilities (9 cols)
+    sba_category IN (as_endorser_comaker|legal_claims_judgments|provision_federal_tax|other_special_debt)
+
+  pfs_supporting_docs — file attachments (12 cols)
+    is_registry_link boolean + CHECK: either registry link with compliance_asset_id OR storage_path
+
+  pfs_access_grants — grant-based access control (14 cols)
+    grantee_type ('contact'|'org_role'|'external_email') + CHECK enforcing per-type nullability
+    access_level ('view'|'suggest'|'edit'|'admin')
+
+  pfs_access_requests — pending access requests (18 cols)
+    status ('pending'|'approved'|'denied'|'withdrawn'|'expired'), auto-expires in 30 days,
+    granted_grant_id (FK→pfs_access_grants ON DELETE SET NULL) if approved
+
+  pfs_share_events — share history (20 cols)
+    recipient_type ('bank'|'lender'|'attorney'|'other'), share_token UNIQUE,
+    attached_to_loan_request_id, expires_at (default 90 days), link_opened_count
+
+  pfs_action_log — audit trail (12 cols)
+    action text, payload jsonb, signed_hash, ip_address inet, user_agent
+
+  pfs_search_contacts(p_org_id, p_query, p_limit=10) — RPC, SECURITY DEFINER SET search_path
+    Returns contact_id, first_name, last_name, full_name, email, primary_role
+    ILIKE search on First Name || Last Name and Email columns of "Contacts" table
+
+LEGACY PFS Tables (bank app, slated for Phase 1c retirement)
+
+  st_personal_financial_statements (34 cols) — SBA Form 413 single-table
+  pfs_submissions (22 cols) — DocuSign envelope tracking + JSON blob asset/liab/income/contingent
+
 ```
 
 ### Column Name Gotchas (registry of bugs we've hit)
@@ -259,6 +333,33 @@ Finance (added Jul 24 2026 from L series lessons)
     API's order= clause. If you just need "some row with the metric",
     use filter-then-dedup (see above).
 
+  PFS — dual-implementation state (Jul 25 2026 → resolves in Phase 1b/1c):
+    Two parallel PFS implementations exist in the same database:
+    * BANK app uses `st_personal_financial_statements` (34 cols, SBA
+      Form 413 columns per line item) + `pfs_submissions` (DocuSign envelope)
+    * FINANCE app uses `personal_financial_statements` (7 cols header) +
+      10 satellite tables (`pfs_versions`, `pfs_asset_lines`,
+      `pfs_liability_lines`, `pfs_income_lines`, `pfs_contingent_liability_lines`,
+      `pfs_supporting_docs`, `pfs_access_grants`, `pfs_access_requests`,
+      `pfs_share_events`, `pfs_action_log`)
+    Bank's schema is simpler but hardcoded to Backbeat. Finance's schema
+    is more sophisticated (versioning, granular access grants, share
+    tracking, audit log). Bank consolidation Phase 1b migrates bank UI
+    to finance's schema. Phase 1c retires the legacy tables. Until then,
+    if you're touching PFS: verify which app you're in, use the right table set.
+
+  DEMO/PROD schema drift is a systemic risk (Jul 24-25 2026 case studies):
+    Yesterday closed Financial_Statements missing 7 columns on PROD (silent
+    400 → q() returns []). Today closed PFS missing 11 tables + 1 RPC on
+    PROD (same failure mode). Both bugs latent for weeks because nobody
+    tested with real PROD data. There are almost certainly MORE tables
+    with the same drift across bank/sales/lender/attorney apps. Session
+    Discipline mandates DEMO/PROD parity check BEFORE any session touches
+    a table — but the discipline was violated on both bugs (caught late,
+    not up front). Consider a scheduled sweep: for every table referenced
+    by app code, verify columns/existence match between projects.
+    Migration name pattern for these fixes: `add_missing_{table_group}_v1`.
+
   Financial_Statements — DEMO/PROD schema drift:
     DEMO (tbihmlnqpwdeiethgwaf) has more columns than PROD sometimes carries.
     Pre-Jul 24 2026 PROD was missing: Cash, Gross_profit, COGS,
@@ -317,6 +418,8 @@ Finance (added Jul 24 2026 from L series lessons)
 | TC-014 | Financial Statements CF path | Cash Flow filter → 9 cards → 3-line sparkline. Click → modal with 3-line hero (Op green, Inv amber, Fin navy) + crosshair + legend + period table with 3 CF rows. Backbeat 2023/2024/2025 CF values: 310K/-90K/-155K, 395K/-45K/-35K, 605K/-120K/-275K. |
 | TC-015 | DEMO/PROD Financial_Statements column parity | `information_schema.columns` for Financial_Statements on ptgtliwllimkswtajcmy contains every column listed in `app/api/data/route.js` line 97 SELECT clause. Regression guard against "silent 400 on missing column" pattern. |
 | TC-016 | Security advisor delta check | Snapshot advisor count before any DDL work. After DDL, re-check and assert delta is intentional (usually 0 for pure schema additions). Do NOT rely on a static count — capture at session start. |
+| TC-017 | PFS table parity check | `information_schema.tables` on PROD contains all 11 tables referenced by finance/app/api/pfs/route.js: `personal_financial_statements`, `pfs_versions`, `pfs_asset_lines`, `pfs_liability_lines`, `pfs_income_lines`, `pfs_contingent_liability_lines`, `pfs_supporting_docs`, `pfs_access_grants`, `pfs_access_requests`, `pfs_share_events`, `pfs_action_log`. Also verify `pfs_search_contacts` RPC exists. Regression guard against re-drift. |
+| TC-018 | Cross-app schema drift audit | For every table imported by ANY app repo (`finance`, `bank`, `sales`, `lender`, `attorney`, `stverify`, `chamber`, `HR`, `ProHR`), verify the table exists on PROD. Automatable via grepping app repos for PostgREST calls (`from('table_name')` or `?rest/v1/table_name`) then verifying against `information_schema.tables`. Should be run at least monthly if not on every session that touches DB. |
 
 ---
 
@@ -362,7 +465,32 @@ C3 PROD Financial_Statements schema parity (Cash, Gross_profit, COGS, Operating_
 C4 DocuSign PFS v1 integration (finance app, Jul 23)
 
 ### FF Log D 🚧 (Jul 2026 — Finance/Bank consolidation)
-D1 Bank → Finance consolidation Phase 1: PFS reconciliation between finance and bank apps (in progress)
+
+D1 Bank → Finance consolidation Phase 1a: PROD PFS schema alignment ✅ (Jul 25)
+   - Migrated 11 PFS tables from DEMO to PROD via `add_missing_pfs_tables_v1`
+   - Closed live production bug: finance's /api/pfs was 400-erroring silently
+     because `personal_financial_statements`, `pfs_versions`, `pfs_asset_lines`,
+     `pfs_liability_lines`, `pfs_income_lines`, `pfs_contingent_liability_lines`,
+     `pfs_supporting_docs`, `pfs_access_grants`, `pfs_access_requests`,
+     `pfs_share_events`, `pfs_action_log` existed only on DEMO
+   - Also created `pfs_search_contacts` RPC and 17 indexes
+   - Zero data disruption (all tables were empty on both sides)
+
+D2 Bank → Finance consolidation Phase 1b: Bank UI migration (next session)
+   - Bank uses LEGACY tables `st_personal_financial_statements` (34 cols, SBA
+     Form 413 columns) and `pfs_submissions` (DocuSign envelope) — both exist
+     on PROD, bank works today
+   - Finance uses NEW 11-table set with versioning, granular access, sharing,
+     audit log — the better design
+   - Need to migrate bank/pages/api/banking.js (lines 250 and 613) and
+     bank/pages/api/index-overview.js (line 92) from legacy to new schema
+   - Bank/pages/index.jsx:5799 does direct client-side PostgREST calls to
+     `pfs_submissions` — SECURITY anti-pattern, migrate behind API route
+
+D3 Bank → Finance consolidation Phase 1c: Retire legacy PFS tables
+   - Deprecate `st_personal_financial_statements` and `pfs_submissions`
+   - Data migration (both empty on PROD as of Jul 25, easy) or one-way sync
+   - Drop tables after bank UI cutover
 
 ### Next Phase
 - Bank → Finance consolidation (Phases 1-5, plan drafted Jul 24)
