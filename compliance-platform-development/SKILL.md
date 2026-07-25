@@ -1,10 +1,12 @@
 ---
 name: compliance-platform-development
 description: >-
-  Development norms, style guide, deployment workflow, and platform architecture for the Start Today™ compliance SaaS. Use this skill whenever building, styling, or deploying any UI component, dashboard, page, modal, API route, RPC, or edge function for any Start Today app — including hr.starttoday.biz, prohr.starttoday.biz, legal.starttoday.biz, admin.starttoday.biz, and all other subdomains. Covers the full stack: Next.js/Vercel frontend conventions, Supabase patterns, color palette, enterprise aesthetic, API route patterns, RPC patterns, and git/deploy workflow. Trigger on any platform build task, styling question, component creation, or deployment step.
+  Development norms, style guide, deployment workflow, and platform architecture for the Start Today™ compliance SaaS. Use this skill whenever building, styling, or deploying any UI component, dashboard, page, modal, API route, RPC, or edge function for any Start Today app — including hr.starttoday.biz, prohr.starttoday.biz, legal.starttoday.biz, admin.starttoday.biz, finance.starttoday.biz, and all other subdomains. Covers the full stack: Next.js/Vercel frontend conventions, Supabase patterns, color palette, enterprise aesthetic, API route patterns, RPC patterns, and git/deploy workflow. Trigger on any platform build task, styling question, component creation, or deployment step.
 ---
 
 # Start Today™ Platform Development
+
+Last updated: Jul 24 2026 — PROD DDL checklist + DEMO/PROD parity discipline added.
 
 ## Stack (Current — Softr has been fully removed)
 
@@ -13,6 +15,7 @@ description: >-
 | Frontend | Next.js App Router (Node 24) | One repo per subdomain |
 | Hosting | Vercel (team: j-1168s-projects) | Auto-deploy on git push to main |
 | Database | Supabase PostgreSQL (ptgtliwllimkswtajcmy) | Project: Start Today Live |
+| DEMO database | Supabase PostgreSQL (tbihmlnqpwdeiethgwaf) | Project: Start Today Demo |
 | Auth | Custom JWT (jose) + TOTP MFA | Cookie: `hr_session`, `JWT_SECRET` env var |
 | AI | Anthropic Claude API + Voyage AI (voyage-law-2) | Embeddings for law_records, knowledge_base |
 | Edge functions | Supabase Deno edge functions | hr-dashboard-data, carl-*, etc. |
@@ -29,9 +32,10 @@ description: >-
 | Pro HR | prohr.starttoday.biz | prj_3Eia7K4L2JVkBzhENbadGbF2yjwZ | Starttodaybiz/ProHR |
 | Attorney | legal.starttoday.biz | prj_sczZV0Y6EmonWmfHZSxttTwbXZCs | Starttodaybiz/attorney-dashboard |
 | STVerify | stverify.starttoday.biz | prj_m8gd7DrEpLLoydfG4jDQvmAlAlSM | Starttodaybiz/stverify |
+| Finance | finance.starttoday.biz | prj_etyUAsXqQD6aqD8kmeU3rfE6TxeD | Starttodaybiz/finance |
 
-**Team ID:** `team_7hbKJDeZuvbjZ7aTxXxUnFv4`  
-**Git identity:** j@starttoday.biz  
+**Team ID:** `team_7hbKJDeZuvbjZ7aTxXxUnFv4`
+**Git identity:** `Starttodaybiz <Starttodaybiz@users.noreply.github.com>` (finance) or `j@starttoday.biz` (HR/legacy)
 **Deploy:** `git push origin main` → Vercel auto-deploys. Only push when Jason approves.
 
 ### Required Env Vars (ALL apps)
@@ -44,6 +48,69 @@ JWT_SECRET=<session signing secret>
 NEXT_PUBLIC_APP_URL=<app's own domain>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ```
+
+---
+
+## PROD DDL Checklist (READ BEFORE ANY PROD SCHEMA CHANGE)
+
+Before ANY schema change on PROD (`ptgtliwllimkswtajcmy`):
+
+### 1. Snapshot advisors
+```
+Supabase:get_advisors(project_id='ptgtliwllimkswtajcmy', type='security')
+```
+Save the count. This is the pre-migration baseline for delta comparison.
+
+### 2. DEMO/PROD parity check for the target table
+Run on BOTH ptgtliwllimkswtajcmy AND tbihmlnqpwdeiethgwaf:
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = '<Target>'
+ORDER BY ordinal_position;
+```
+Compare column lists. Note any drift. **DEMO is not always the source of truth** — sometimes DEMO has experimental columns that shouldn't propagate to PROD.
+
+### 3. DEMO/PROD parity check for the app's API SELECT clauses
+BEFORE deploying frontend code that reads new columns:
+```bash
+grep -n "select=" app/api/data/route.js  # or equivalent route file
+```
+Every column in the SELECT must exist on PROD. Silent 400 errors from PostgREST when a column is missing → `q()` returns `[]` → user sees empty data. **LIVE PRODUCTION BUG PATTERN** discovered Jul 24 2026 on Finance app.
+
+### 4. Apply the migration
+Use `Supabase:apply_migration` (not `execute_sql`), so it's recorded in the migration history.
+
+Include `NOTIFY pgrst, 'reload schema';` at the end of DDL so PostgREST picks up new columns immediately without waiting for its polling cycle.
+
+Example:
+```sql
+ALTER TABLE "Financial_Statements"
+  ADD COLUMN IF NOT EXISTS "Cash" numeric,
+  ADD COLUMN IF NOT EXISTS cf_operating numeric;
+
+NOTIFY pgrst, 'reload schema';
+```
+
+### 5. Post-migration verification
+- Re-snapshot advisors. Verify delta is intentional (usually 0 for schema additions).
+- Verify column exists via `information_schema.columns` query.
+- Run the relevant TC (e.g. TC-015 for Financial_Statements).
+- Update `platform-dev-test-ontology` Schema Ontology entry IN THE SAME SESSION.
+
+### 6. API mapper follow-up
+If the DDL adds columns that will be exposed via an API route with a `stmts.map(s => ({...}))` reshape, update the mapper output object in the same commit as the SELECT change. `grep -n "\.map(s => ({" app/api/data/route.js` to find the pattern.
+
+### Approval requirements
+- **Michael sign-off required** for schema changes touching:
+  - Compliance data
+  - Legal reference data
+  - Evidence rules
+  - Policy conflicts
+- **NOT required** for pure data-model alignment (e.g. adding standard financial statement columns to bring PROD in line with DEMO).
+
+When in doubt, ask.
 
 ---
 
@@ -93,6 +160,25 @@ export async function POST(req: NextRequest) {
 - Always unwrap with `Array.isArray(raw) ? raw[0] : raw`
 - Always return `{ ok: true }` on success, `{ ok: false, error }` on failure
 
+### GET-with-explicit-mapper Pattern (Finance app, PostgREST direct)
+
+When a route reads from PostgREST directly (not via RPC) and reshapes the response:
+
+```typescript
+const stmts = await q(`Financial_Statements?...&select=col1,col2,cf_operating&order=...`)
+return Response.json({
+  statements: Array.isArray(stmts) ? stmts.map(s => ({
+    id: s.Financial_statements_id,
+    col1: s.col1,
+    col2: s.col2,
+    cf_operating: s.cf_operating,
+    // ... more fields
+  })) : []
+}, { headers: { 'Cache-Control': 'no-store' } })
+```
+
+**CRITICAL: Adding a column to the SELECT is a TWO-STEP change** — the mapper must also be updated. Adding to SELECT alone silently drops the field before serialization. Grep for `.map(s => ({` in the same file after every SELECT change.
+
 ---
 
 ## Standard RPC Pattern
@@ -118,6 +204,68 @@ $$;
 
 ---
 
+## Install Script Pattern (for shipping code changes)
+
+All finance app code changes ship via install scripts run on Jason's iMac. Standard pattern:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO=~/Downloads/<app>
+FILE="path/to/target.js"
+export GIT_PAGER=cat  # CRITICAL — prevents `git diff` from blocking on `less`
+
+cd "$REPO"
+
+echo "==> Preconditions"
+git status --porcelain | grep -q . && { echo "ERROR: working tree not clean."; git status --short; exit 10; }
+
+echo "==> Fetch + fast-forward main"
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+
+echo "==> Backup"
+cp "$FILE" "/tmp/$(basename $FILE).pre-<fix-name>.bak"
+
+echo "==> Apply patch"
+python3 << 'PYEOF'
+# Idempotency check FIRST
+# Anchor-based replacement
+# Post-patch validation
+# Bracket balance sanity check
+# Verify prior fixes still intact
+# Write file
+PYEOF
+
+echo "==> WRITE OK, PROCEEDING TO COMMIT"  # visibility marker — catches silent script exits
+
+echo "==> Post-write verification"
+grep -q "expected-pattern" "$FILE" && echo "OK" || { echo "ERROR"; exit 20; }
+
+echo "==> Diff"
+git --no-pager diff --stat "$FILE"
+git --no-pager diff "$FILE"
+
+echo "==> Commit + push"
+git -c user.name=Starttodaybiz -c user.email=Starttodaybiz@users.noreply.github.com \
+    add "$FILE"
+git -c user.name=Starttodaybiz -c user.email=Starttodaybiz@users.noreply.github.com \
+    commit -m "<detailed commit message>"
+git push origin main
+```
+
+**Locked lessons (Jul 24 2026 L series):**
+- Always `export GIT_PAGER=cat` — prevents pager blocking
+- Always use `git --no-pager diff` in scripts
+- Print "WRITE OK, PROCEEDING TO COMMIT" between write and commit for visibility
+- Include idempotency check with SKIP path — allows re-running safely
+- Include bracket-balance sanity check before writing to disk
+- Include "verify prior fixes still intact" check to prevent regression
+
+---
+
 ## Auth Pattern
 
 ```typescript
@@ -136,6 +284,21 @@ export async function getSession(req?: NextRequest): Promise<SessionUser | null>
 
 **Login flow:** POST `/api/auth/login` → `verify_admin_password` RPC → MFA check → return `{mfa_required, auth_id, factor_id, org_id}` → TOTP → set cookie
 
+**CRITICAL — Fail-closed getSecret pattern:**
+```typescript
+// WRONG — fail-open, silently returns empty encoder if missing
+const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? '');
+
+// RIGHT — fail-closed, throws if missing
+function getSecret() {
+  const s = process.env.JWT_SECRET;
+  if (!s) throw new Error('JWT_SECRET missing');
+  return new TextEncoder().encode(s);
+}
+```
+
+Fail-open patterns silently accept empty session tokens. Discovered in chamber Jul 2026, must be checked in every app during security remediation.
+
 ---
 
 ## UI Component System
@@ -151,16 +314,26 @@ C.bg, C.surface, C.surface2, C.border, C.navy
 C.blueBg, C.greenBg, C.amberBg, C.redBg
 ```
 
-**Chip variants:** `color="blue" | "green" | "amber" | "red" | "gray"`  
+**Chip variants:** `color="blue" | "green" | "amber" | "red" | "gray"`
 **Btn variants:** `variant="primary" | "ghost" | "green" | "danger"`
 
-### Modal Pattern (slide-in drawer)
-```typescript
-// Fixed right-side drawer: width 680, height 100vh, zIndex 1000
-// Use ModalWrap + ModalHead from QuickModals.tsx pattern
-// Always: onClick={e => e.stopPropagation()} on inner panel
-// Tabs: border-bottom indicator, no background
-```
+### Modal Pattern (locked — CENTERED modals only)
+
+**Finance app + all newer apps:** Centered modals only, NOT right-slide drawers.
+- Dark backdrop
+- Center align
+- Max-width ~720px
+- Rounded 14px
+- Rise+fade entrance (translateY+scale, NOT translateX)
+- ESC + backdrop close
+- No color emoji; monochrome glyphs only (◈ ◊ ↻ → ⚠ ↩)
+- CARL glyph: ◈
+
+**HR app legacy** uses right-side drawer pattern:
+- Fixed right-side drawer: width 680, height 100vh, zIndex 1000
+- Use ModalWrap + ModalHead from QuickModals.tsx pattern
+- Always: onClick={e => e.stopPropagation()} on inner panel
+- Tabs: border-bottom indicator, no background
 
 ---
 
@@ -198,6 +371,12 @@ C.blueBg, C.greenBg, C.amberBg, C.redBg
 ⚫ Critical        → red     (0-39)
 ```
 
+### Vendor separation (locked)
+- Twilio = SMS only
+- Resend = email
+- Internal escalation/alerts = Work Hub (work.starttoday.biz)
+- **Never propose Slack** anywhere — not in specs, alert paths, or escalation designs
+
 ---
 
 ## Score System Architecture
@@ -216,108 +395,62 @@ SELECT calculate_start_scores();    -- writes to Score_Card
 SELECT sync_scores_from_score_card(); -- syncs to entity_start_scores_table
 ```
 
+**Start Score™ is proprietary IP:** Methodology, weights, parameters are NEVER user-configurable. Never write "configurable via admin panel" or "adjustable weights." Scoring is real-time + nightly 6 AM UTC — never "monthly." Use `calculate_start_scores_v4` — `recompute_entity_score_v2` writes NULL and must not be used.
+
 ---
 
-## Known Schema Gotchas
+## Known Schema Gotchas (see platform-dev-test-ontology for full registry)
 
-These column names have burned us — always verify before writing RPCs:
+These column names have burned us — always verify before writing RPCs. Full list in platform-dev-test-ontology under "Column Name Gotchas."
+
+Quick reference for the top 10:
 
 ```
-Employees:
-  ✓ Work_email (not Email)
-  ✓ Full Name (from FirstName)  ← writable despite Airtable-style name
-  ✓ Hire_date (not Start Date)
-  ✓ Employment_type_id UUID FK → G_Employment_types
-  ✓ G_Departments_id UUID FK → G_Departments (PK is Departments_id there)
-
-HR_Compliance_Issues:
-  ✓ CreatedAt is TEXT type → use NOW()::TEXT
-  ✓ Status_id (not G_Statuses_id)
-
-Compliance_Items:
-  ✓ Has 7 NOT NULL FK columns with no defaults
-  ✓ Always SELECT existing row for org to get default FK values before INSERT
-  ✓ G_Compliance_item_status_id (not G_Statuses_id)
-  ✓ Created and Last_modified are TIMESTAMPTZ NOT NULL
-
-G_Departments:
-  ✓ PK is Departments_id (not G_Departments_id)
-
-Entities:
-  ✓ sos_entity_type is the type column (text, not a UUID FK)
-
-Score queries:
-  ✓ Always filter: WHERE "Computed By" = 'calculate_start_scores_v2'
+Employees.Work_email (not Email)
+HR_Compliance_Issues.CreatedAt is TEXT
+Compliance_Items has 7 NOT NULL FK columns — SELECT defaults first
+G_Departments.Departments_id (PK, not G_Departments_id)
+Entities.sos_entity_type (text, not FK)
+Financial_Statements — cf_operating/investing/financing only on 'Cash Flow' rows
+Financial_Statements — DEMO/PROD schema drift possible; verify parity
+Organizations.Organizations_id (PK, not id)
+Score_Card — filter WHERE "Computed By" = 'calculate_start_scores_v2'
+get_gamification_profile() takes entity_id NOT org_id
 ```
+
+---
+
+## Supabase MCP Best Practices
+
+- **Multi-statement gotcha:** `execute_sql` returns only the last result set. Split queries into separate calls when multiple results needed.
+- **DDL vs reads:** `apply_migration` for DDL (append `NOTIFY pgrst, 'reload schema'`); `execute_sql` for reads.
+- **RPC surgical edit pattern:** `pg_get_functiondef` → verify anchor uniqueness → `replace()` → `EXECUTE`. Never re-emit full function bodies.
 
 ---
 
 ## Security Baseline
 
-After any DDL change, check security advisors. Baseline is **22 findings** (all accepted):
+After any DDL change, check security advisors. See `platform-dev-test-ontology` TC-016 for the rolling-baseline approach (the static "22 findings" number is stale as of Jul 24 2026).
+
+Approach: snapshot before DDL, snapshot after DDL, verify delta is intentional.
+
+Categories accepted at PROD as of Jul 2026:
+- Many `anon_security_definer_function_executable` WARN findings (accepted, tracked for future auth work)
 - 20 SECURITY DEFINER views (intentional)
 - 2 extensions in public schema (vector, pg_net)
 - 2 service-role bypass policies (address_verification_log, pfs_submissions)
 
-If count > 22: new RPC missing `SET search_path = public`, or new table missing RLS.
+**Alert if:**
+- New RPC missing `SET search_path = public`
+- New table missing RLS
 
 ---
-
-## Uploading Binary Files (.docx, .pdf, .pptx, .xlsx) to Supabase Buckets
-
-**Default rule: ask the user to drag-and-drop the files into the bucket via the Supabase dashboard. Do NOT try to inline binary content through tool calls.**
-
-This costs effectively zero tokens vs. potentially **hundreds of round-trips** to do it programmatically through Claude's tooling.
-
-### Why programmatic upload of binary files is bad
-
-Claude has no way to upload bytes directly to a Supabase bucket. Every workaround has a dealbreaker:
-
-- **`apply_migration` + hex/base64 staging**: Claude must paste the encoded bytes as a SQL string parameter. The `view` tool, used to read the encoded data from disk, silently truncates output around ~16 KB cumulative. A single 100 KB file requires ~30+ tool calls to chunk + stage + assemble + verify, and any silent truncation corrupts the payload undetected (size mismatch, SHA mismatch, or — worst — the upload "succeeds" with a malformed file).
-- **`deploy_edge_function` with embedded bytes**: same problem. The function source is passed as a string parameter; the encoded blob has to come from somewhere Claude can read cleanly, which loops back to the view-truncation issue.
-- **GitHub PAT-fetch from edge function**: works, but only if the repo is private (sensitive docs can't go in `Starttodaybiz/platform-skills` — that repo is **public**). And `api.github.com` is not in Claude's egress allowlist, so Claude can't create a private repo on demand.
-
-The pattern that **almost** works (chunked b64 staging table + uploader edge function) was built and proven on one ~14 KB file, but each ~3 KB chunk still costs one `apply_migration` round-trip. A 106 KB file = 48 chunks = 48 round-trips. Across nine files in May 2026, this approach was abandoned mid-staging in favor of dashboard upload — see the AR_Collection_Workflow + SOC 2 doc registry batch.
-
-### The right pattern
-
-1. **Claude generates the files locally** (`/mnt/user-data/outputs/`) using the docx/pdf/pptx/xlsx skills.
-2. **Claude calls `present_files`** so the user can download them in one click.
-3. **User drag-and-drops** into the target bucket via `https://supabase.com/dashboard/project/<ref>/storage/buckets/<bucket>`.
-4. **Claude verifies** the upload via SQL:
-   ```sql
-   SELECT name, metadata->>'size' AS size_bytes, created_at
-   FROM storage.objects
-   WHERE bucket_id = '<bucket>'
-   ORDER BY created_at DESC LIMIT 20;
-   ```
-5. **Claude registers** the now-uploaded files via the appropriate RPC (`fn_publish_internal_doc`, etc.).
-
-When presenting files for upload, give exact target filenames (case-sensitive, including extension) so the user doesn't rename and break the registration step.
-
-### Cleaning up duplicate/wrong-name uploads
-
-`storage.objects` is **delete-protected at the DB layer**:
-```
-ERROR: 42501: Direct deletion from storage tables is not allowed.
-       Use the Storage API instead.
-```
-Have the user delete via dashboard, or call `storage.delete_object` from an edge function with service_role.
-
-### When programmatic upload IS appropriate
-
-- Files **already in storage** that need to be moved/copied between buckets — service_role edge function with `storage.copy()` or `download()` + `upload()`.
-- Files generated **inside an edge function** (e.g., a server-side PDF render) — the function already has the bytes; just call `.upload()`.
-- **Text** files (.md, .json, .sql) under ~30 KB — these can go through `apply_migration` cleanly because there's no encoding step that introduces silent truncation risk.
-
-The "ask the user to drop files in the bucket" rule applies specifically to **binary docs Claude generates locally and needs to land in a bucket**. Don't burn tokens trying to be clever about it.
-
 
 ## See Also
 
 - `platform-page-audit` — QA sweep methodology, login fixes, write-back test scripts
 - `platform-dev-test-ontology` — feature ontology, test cases, FF log, schema registry
-- `platform-security-audit` — comprehensive security/SOC 2 audit (14 sections + JSON gap matrix)
-- `platform-security-remediate` — guided sprint plans for closing security envelope gaps
-
-**All Start Today™ Claude skills are versioned at https://github.com/Starttodaybiz/platform-skills.** Active runtime copies live under `/mnt/skills/user/`; the repo is the backup that survives sandbox loss.
+- `platform-security-audit` — comprehensive security audit report generator
+- `platform-security-remediate` — security finding remediation playbook
+- `platform-responsive-design` — responsive design recipes and useCompact viewport
+- `mfa-implementation` — TOTP MFA integration pattern
