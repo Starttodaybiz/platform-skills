@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Dev Test Ontology
 
-Last updated: Jul 25 2026 — v5: Phase 1c enabling schema shipped (Sprints 0.1-0.4) + DocuSign central infrastructure + PFS bank RPCs + 9 new locked lessons.
+Last updated: Jul 26 2026 — v6: Phase 2 shipped in full (Sprints 2.1-2.6) — CFO Cash card, Plaid activation, Recent Transactions, Cash Basis Summary, Debt Workbench redesign, bank /banking route retirement. L37 (SECURITY DEFINER revoke) + L38 (schema tolerance) + L39 (Start_Score DEMO/PROD divergence — L38 recurrence) locked. `@start-today/platform-docusign` v0.1.0 published.
 
 ---
 
@@ -854,3 +854,112 @@ the failure. Do not consider the sprint shipped until state=READY on
 a deploy that carries the target commit SHA. Applies especially when
 multiple commits land in quick succession — check that the final
 deploy corresponds to the intended commit.
+
+**Jul 25 2026 — Phase 1c post-ship hardening (one more locked lesson):**
+
+L37. **SECURITY DEFINER RPCs need explicit REVOKE FROM anon, authenticated
+     — not just PUBLIC.** Postgres's default privileges grant EXECUTE on
+     new functions to PUBLIC AND to specific roles like `anon` and
+     `authenticated` (Supabase's default roles). `REVOKE EXECUTE FROM
+     PUBLIC` alone leaves anon/authenticated with direct grants, so
+     Supabase's `anon_security_definer_function_executable` and
+     `authenticated_security_definer_function_executable` advisors both
+     fire. The canonical pattern:
+     ```
+     REVOKE EXECUTE ON FUNCTION public.my_rpc(...) FROM anon, authenticated, PUBLIC;
+     GRANT  EXECUTE ON FUNCTION public.my_rpc(...) TO service_role;
+     ```
+     Discovered post-Sprint 0.4/0.5: all 7 new Phase 1c RPCs
+     (create_docusign_envelope, record_docusign_event,
+     list_envelopes_for_resource, is_compliance_officer_for_org,
+     resolve_bank_contact_for_org, save_pfs_from_bank, get_pfs_for_bank)
+     had REVOKE FROM PUBLIC applied at creation time but not the explicit
+     revoke from anon+authenticated. Fixed on both DEMO and PROD via
+     `phase_1c_rpcs_revoke_anon_authenticated_execute` migration.
+     Verification via `information_schema.routine_privileges`: grantees
+     should be exactly `{postgres, service_role}`. **Rule for all
+     future SECURITY DEFINER RPC creation migrations:** include the
+     explicit REVOKE from anon+authenticated in the same DDL block as
+     CREATE FUNCTION, then GRANT to service_role.
+
+L38. **DEMO and PROD schemas diverge — RPCs that touch quoted-name
+     Airtable-origin tables must be schema-tolerant.** Two divergences
+     bit Sprint 2.5 (`get_finance_debt` covenants extension) in
+     sequence: (a) `Loans."Term (months)"` is `integer` on DEMO but
+     `text` on PROD — the pre-existing regex `regexp_replace(coalesce(
+     l."Term (months)",''),'[^0-9.]','','g')` implicitly relied on the
+     column being text. Fix: cast to text first — `coalesce(l."Term
+     (months)"::text, '')`. (b) `Loan_covenants_and_conditions` has
+     entirely different optional columns per project: DEMO has
+     `Covenant_language`, `Headroom_current`, `Headroom_threshold`;
+     PROD has `Docs`, `extracted_from_doc_id`, `extraction_method`,
+     `extraction_confidence`, `extraction_at`, `source_document_excerpt`,
+     `validated_by_carl`, `carl_validation_notes`. Direct references
+     (`c.source_document_excerpt`) work on PROD but fail on DEMO with
+     `column does not exist`. Fix: read optional divergent columns
+     via `to_jsonb(c) ->> 'column_name'` — returns null for absent
+     columns instead of erroring. Guaranteed-present columns
+     (`Covenants_and_conditions_id`, `Loan_id`, `Covenant Name`, `Type`,
+     `Threshold`, `Frequency_id`, `Next Due`, `Status_id`, `Notes`) can
+     still be dot-referenced. **Rule for all future cross-environment
+     RPCs:** enumerate the required columns, verify they exist on both
+     projects, and read optional/environment-specific columns
+     defensively via `to_jsonb`. Test the RPC on DEMO immediately after
+     the migration succeeds — do not assume "migration applied
+     successfully" equals "RPC works" until an actual SELECT confirms
+     the return shape.
+
+**Jul 26 2026 — Phase 2 close-out (one more locked lesson, L38 recurrence):**
+
+L39. **L38 confirmed on `Start_Score`. All legacy quoted-name tables must
+     be assumed to diverge across DEMO/PROD — the default read pattern
+     is `to_jsonb(row)->>'col'`, not direct dot access.** Sprint 2.1
+     extending `get_finance_cfo` to include a cash summary block also
+     needed to keep reading `Start_Score`. The pre-existing RPC used
+     direct column reads on `overall_score / score_band / entity_score /
+     compliance_score / financial_score / insurance_score / hr_score`
+     which are the PROD columns. DEMO has an entirely different flat
+     shape — `Score / Band / Pillar_scores (jsonb)` — with pillar
+     values nested inside a JSON object. Direct references failed on
+     DEMO with `column "overall_score" does not exist`. Notably: the
+     pre-existing RPC was presumably working somehow (Bowie's CFO tab
+     rendered), which means DEMO must have had a different function
+     definition than PROD before my CREATE OR REPLACE overwrote it —
+     surfacing a broader risk: **RPCs of the same signature may quietly
+     diverge across projects.** Fix followed L38's pattern:
+     ```sql
+     select to_jsonb(ss) into v_score_row
+       from public."Start_Score" ss
+       where ss.org_id = p_org_id
+       order by coalesce((to_jsonb(ss)->>'score_date')::timestamptz,
+                         (to_jsonb(ss)->>'Calculated_at')::timestamptz)
+                desc nulls last
+       limit 1;
+     v_score := jsonb_build_object(
+       'overall',    coalesce((v_score_row->>'overall_score')::numeric,
+                              (v_score_row->>'Score')::numeric),
+       'band',       coalesce(v_score_row->>'score_band',
+                              v_score_row->>'Band'),
+       'entity',     coalesce((v_score_row->>'entity_score')::numeric,
+                              (v_score_row->'Pillar_scores'->>'entity')::numeric),
+       ...
+     );
+     ```
+     Third confirmed occurrence of the pattern (Loans, Loan_covenants,
+     Start_Score) in three consecutive sprints means this is not a
+     quirk — it is the operating state of the schema. **Rules
+     upgraded:**
+     1. When touching ANY legacy quoted-name Airtable-origin table
+        (`"Start_Score"`, `"Loans"`, `"Loan_covenants_and_conditions"`,
+        `"Financial_Statements"`, `"Contacts"`, `"Employees"`, etc.),
+        default to `to_jsonb(row)->>'col'` for every column read
+        except the join key (`org_id`, PK). Direct references are only
+        safe for the PK and org_id.
+     2. Before `CREATE OR REPLACE FUNCTION`, dump the existing function
+        definition on BOTH projects (`SELECT pg_get_functiondef(...)`)
+        and diff them. If they differ, the new version must handle
+        both call sites' schemas — do not silently replace a
+        DEMO-specific version with a PROD-shaped one.
+     3. Test on DEMO first EVERY time. Sprint 2.1 rediscovered this
+        rule for a fourth time — the L23-locked "DEMO-first validation"
+        discipline must not slip.
