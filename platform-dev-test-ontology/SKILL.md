@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Dev Test Ontology
 
-Last updated: Aug 21 2026 — v8: corrected the Score_Card "Computed By" gotcha, which documented 'calculate_start_scores_v2' and was causing the empty-result bug it appeared to guard against (85 of 92 rows are v4). L42 (install-script side artifacts + delta bracket check) and L43 (cron.job_run_details — two compliance jobs at 0 successes for 62 days) locked. TC-022 adds fn_platform_static_health_check().
+Last updated: Aug 21 2026 — v9: L44 (mixed aliased/unaliased references defeat blanket replaces), L45 (assert anchor PLACEMENT, not just uniqueness), L46 (legacy/live table pairs — check who READS it), L47 (a control is only as wide as its call sites; an empty shadow log can mean uninstrumented). TC-023/024 and the matter visibility model added.
 
 ---
 
@@ -1185,3 +1185,120 @@ which 2 are known false positives from REFERENCING transition tables, and
 `fn_c2c_evidence_from_kyc` which needs its intended join specified before it can
 be fixed. Requires the `plpgsql_check` extension, installed in `extensions`
 (deliberately not `public`, to avoid an extension_in_public advisor finding).
+
+**Aug 21 2026 — surgical-edit failure modes (three locked lessons):**
+
+L44. **A function body can mix aliased and unaliased references to the same
+     table. A blanket string replace across it will compile and then throw.**
+     `check_function_bodies = OFF` does not resolve aliases at creation, so the
+     error appears on first call, not on deploy.
+     Two instances in one session:
+     * `get_hr_score_health` — 6 references to `sc."Start_score"`, of which only
+       4 were the band predicates; the other 2 sat in genuinely aliased
+       `FROM "Score_Card" sc` clauses. A blanket replace would have broken
+       working code.
+     * `get_firm_matters` — the matter list uses `FROM public.v_work_attorney wi`
+       while the four stats counters use bare `FROM public."Work_Items"`. One
+       replace put `wi.work_item_id` into all five and the counters threw
+       `42P01 missing FROM-clause entry for table "wi"`.
+     **Rule:** before replacing anything in a function body, count the target in
+     each context separately, replace per context, and assert both counts after:
+     ```sql
+     n_aliased := (SELECT count(*) FROM regexp_matches(def, 'wi\.work_item_id', 'g'));
+     n_bare    := (SELECT count(*) FROM regexp_matches(def, '\(p_user_email, work_item_id\)', 'g'));
+     IF n_aliased <> 1 OR n_bare <> 4 THEN RAISE EXCEPTION '...'; END IF;
+     ```
+
+L45. **Anchor PLACEMENT must be asserted, not just anchor uniqueness.**
+     A unique anchor can still be in the wrong place.
+     * `create_matter`: the anchor `v_created := true;` is unique — and sits
+       inside the branch that only runs when a NEW client org is created, and
+       BEFORE the `Work_Items` INSERT. The inserted assignment block would have
+       fired only for new-org matters, against a `work_item_id` with no row yet.
+     * Second attempt bounded the block on `RETURN jsonb_build_object(` and
+       matched the **first of seven** — an early error return at offset 2051,
+       ahead of the target at 4014.
+     **Rule:** after inserting, assert position relative to the statement that
+     must precede it:
+     ```sql
+     IF position('Work_Members' in v_new) < position('INSERT INTO public."Work_Items"' in v_new) THEN
+       RAISE EXCEPTION 'block landed before the row it references';
+     END IF;
+     ```
+     Prefer bounding on the block's own terminator over a generic keyword, and
+     count occurrences of any keyword anchor before trusting `position()`.
+
+L46. **This schema contains legacy/live table PAIRS holding the same content.
+     Confirm which one the application reads before building on either.**
+     `Matter_Assignments` (170 rows, `Matter_id` keyed to the legacy
+     `Attorney_Matters`, read by **no function at all**) and `Work_Members`
+     (172 rows, keyed to `work_item_id`, read by `get_matter_detail`,
+     `verify_org_access` and `v_work_attorney`) both held the same firm team.
+     An hour of remapping, FK-ing, guard triggers and `create_matter` wiring went
+     onto the dead one before the live one surfaced.
+     The tell is not row count or column quality — it is **who reads it**:
+     ```sql
+     SELECT proname FROM pg_proc
+     WHERE pronamespace='public'::regnamespace AND prosrc ILIKE '%<table>%';
+     ```
+     Zero readers means legacy, however healthy the data looks. Known pairs so
+     far: Matter_Assignments/Work_Members, and the Attorney_Matters id space
+     generally (Matter_Invoices, Matter_Time_Entries, Matter_Expenses,
+     Matter_Tasks."Matter_id", get_firm_tasks, get_firm_calendar_tasks).
+
+**Aug 21 2026 — security control width (one locked lesson):**
+
+L47. **A security control is only as wide as the functions that consult it. An
+     empty shadow log can mean "nothing is instrumented", not "nothing is denied".**
+     Default-closed matter visibility was built, verified in both directions and
+     correct — and was consulted by **1 of 30** allow-listed functions. Flipping
+     to enforce at that point would have hidden a matter from its detail view
+     while it still appeared in the list, its messages still opened, its billing
+     still loaded, and a screened person could still write to it. A screen with
+     one door locked and twenty open is worse than none, because it looks like
+     protection.
+     The empty shadow log would have read as evidence of safety.
+     **Rule:** before trusting shadow evidence, count the call sites:
+     ```sql
+     SELECT CASE WHEN prosrc ILIKE '%<gate_fn>%' THEN 'gated' ELSE 'UNGATED' END,
+            count(*), string_agg(proname, ', ')
+     FROM pg_proc WHERE pronamespace='public'::regnamespace
+       AND proname = ANY(<allow_list>) GROUP BY 1;
+     ```
+     Corollary: gate at the **shared helper** where one exists.
+     `_caller_firm_for_matter` was already the guard for 10 functions, 9 of them
+     writes including every trust path, so adding the check there covered all 10
+     in a single change.
+
+**Matter visibility model (as built 2026-08-21):**
+```
+matter_visibility_settings   mode = 'shadow' | 'enforce'  (one row)
+                             unassigned_visible_to_attorneys (default true)
+matter_visibility_shadow_log what enforcement WOULD deny
+Work_Members                 canonical firm team. NOT Matter_Assignments.
+_caller_can_see_matter(email, wi)      team membership. NO admin bypass, by decision.
+_caller_may_act_on(email, kind, id)    resolves sop_instance | task | matter, fails closed
+_work_item_for(kind, id)               id resolver
+fn_log_matter_visibility(...)          logs; always permits while mode='shadow'
+```
+Flip with `UPDATE matter_visibility_settings SET mode='enforce'` — no deploy.
+24 of 30 allow-listed functions gated. The 6 that are not are ALL blocked on the
+Attorney_Matters consolidation, not skipped: `get_matter_billing`,
+`record_invoice_payment`, `void_invoice`, `get_firm_calendar_tasks`,
+`get_firm_billing`, `get_firm_expenses` (the last has 0 rows, so no exposure).
+Three layers keep a matter from ever being unassigned: backfill, `create_matter`
+assigning on creation, and a BEFORE DELETE trigger refusing removal of the last
+responsible attorney from a live matter.
+
+**Additional TCs in the Test Case Registry:**
+
+TC-023: **Matter visibility shadow verification.** Before flipping to enforce,
+run BOTH: (a) the per-member simulation — for every active firm member × every
+live matter, count what `_caller_can_see_matter` would hide; expect 0 for anyone
+who should see it; (b) the call-site count from L47; expect every allow-listed
+function that touches matter data to be gated or explicitly listed as blocked.
+A clean shadow log alone is not sufficient evidence — see L47.
+
+TC-024: **Legacy/live pair check.** Before building on any table that looks like
+a team, assignment, or join table, run the reader query from L46. Zero readers
+means it is the legacy half of a pair and the live one must be found first.
