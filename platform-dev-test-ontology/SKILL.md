@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Dev Test Ontology
 
-Last updated: Aug 21 2026 — v9: L44 (mixed aliased/unaliased references defeat blanket replaces), L45 (assert anchor PLACEMENT, not just uniqueness), L46 (legacy/live table pairs — check who READS it), L47 (a control is only as wide as its call sites; an empty shadow log can mean uninstrumented). TC-023/024 and the matter visibility model added.
+Last updated: Aug 21 2026 — v10: L48 (measure rows not constraints — the Attorney_Matters consolidation was 950 fully-resolvable rows, not a multi-session migration), L49 (grouping keys determine the number you report; a duplication claim was overstated 3x), L50 (RETURNS void makes a caller's error handling unreachable). TC-025 added, plus the L44 third-recurrence note.
 
 ---
 
@@ -1302,3 +1302,96 @@ A clean shadow log alone is not sufficient evidence — see L47.
 TC-024: **Legacy/live pair check.** Before building on any table that looks like
 a team, assignment, or join table, run the reader query from L46. Zero readers
 means it is the legacy half of a pair and the live one must be found first.
+
+**Aug 21 2026 — estimation and measurement (two locked lessons):**
+
+L48. **Measure the scope of a migration before believing the estimate. Count
+     ROWS, not constraints.**
+     The `Attorney_Matters` consolidation was treated across a whole session as
+     the central blocker — six ungated functions, Billing & Trust, the
+     `Matter_Assignments` retirement, `get_firm_tasks` display fields — and as a
+     multi-session data migration too risky to start. The estimate came from
+     counting FK constraints (10) and noting that 150 of 230 FKs to
+     `Organizations` are `ON DELETE CASCADE`.
+     Measured properly:
+     * **six of the ten FK tables are EMPTY** (Matter_Expenses,
+       Matter_Trust_Transactions, Matter_Documents, Matter_Key_Dates,
+       Matter_Activity_Log, Client_Portal_Invites);
+     * the four with rows hold **950 rows total** — Time_Entries 545,
+       Invoices 195, Assignments 170, Tasks 40;
+     * **every row resolved** via `Work_Items.legacy_matter_id`, which is unique,
+       so the mapping is 1:1;
+     * the one "unmapped" legacy matter turned out to exist on BOTH sides under
+       the **same uuid**, with `legacy_matter_id` never set — a one-row link, not
+       a migration.
+     Phase 1 was a single migration. Billing & Trust went from empty to 545 time
+     entries and 195 invoices across 87 matters.
+     **Rule:** before scoping any consolidation, run row counts and a
+     resolvability check per dependent table. A constraint count describes the
+     shape of the problem; only row counts describe its size.
+     **Corollary:** Phase 1 (link + backfill + repoint readers) is separable from
+     Phase 2 (drop legacy columns and FKs) and carries far less risk. Do Phase 1
+     early; gate Phase 2 on real usage. Here 17 functions still read
+     Attorney_Matters and **six would break outright** if the key were dropped —
+     `get_hr_matters`, `get_portal_clients`, `get_firm_portal_users`,
+     `toggle_task_done`, `create_matter_from_hr_issue`, `get_firm_expenses` —
+     several of them cross-app.
+
+L49. **The grouping key determines the number you report. State it, and check it
+     matches the claim being made.**
+     Reported: "8,403 identical notifications for one compliance item." That
+     grouped by title and a **70-character body prefix, across 77 organisations** —
+     so it counted rows that shared a title and an opening phrase, not duplicates
+     of one item.
+     Grouped by `(org_id, title, md5(body))`: **37,692 distinct notifications
+     written 56,023 times** — roughly 33% excess, worst single case 76 repeats
+     over 55 days. Of those, only **6,021 were same-day**; the rest were the same
+     notice re-sent on different days, which may be intended behaviour.
+     The corrected finding still justified a fix, but a third the size and a
+     different fix: a same-day unique index, not a purge.
+     **Rule:** when quantifying a data problem, group by the full natural key of
+     the thing you are claiming is duplicated. If the claim is "duplicates of one
+     item", the grouping must identify one item. Prefixes and cross-tenant
+     aggregates inflate.
+
+**Aug 21 2026 — error signalling (one locked lesson):**
+
+L50. **`RETURNS void` makes a caller's error handling unreachable. Adding
+     `if (!ok)` to the client does nothing if the function cannot say `false`.**
+     `toggle_task_done` returned `void`. The frontend had already been fixed
+     (cbf37ca) to route it through `rpcWrite` and roll back the optimistic tick on
+     `!wr.ok` — correct client code, permanently dead branch, because a void
+     return always reads as success. The task checkbox appeared to save whether or
+     not it did.
+     This is the silent-write family again, but inverted: previous instances had a
+     correct server and a client that discarded the response. Here the client was
+     right and the server had nothing to give it.
+     **Rule:** every write RPC returns jsonb with at minimum `ok` and, on failure,
+     `error`. Auditing for it:
+     ```sql
+     SELECT proname FROM pg_proc
+     WHERE pronamespace='public'::regnamespace
+       AND prorettype = 'void'::regtype
+       AND (prosrc ILIKE '%INSERT%' OR prosrc ILIKE '%UPDATE %' OR prosrc ILIKE '%DELETE%');
+     ```
+     Changing a return type requires DROP + CREATE — so L37/L40 apply, and the
+     grants must be re-issued in the same migration.
+
+**L44 recurrence note (third instance, same session):**
+The mixed-alias trap fired three times on 2026-08-21: `get_hr_score_health`,
+`get_firm_matters`, and `get_firm_billing`. The third is the instructive one — the
+clio join text was **byte-identical in two branches** with different aliases
+(`te` and `i`), so a single `replace()` applied to both and put `i.work_item_id`
+into the time-entries branch. The reason it recurred despite L44 being written
+hours earlier: the string *looked* unique, and uniqueness of the string was
+mistaken for uniqueness of the context. Assert a count per context, always, even
+when the anchor appears distinctive.
+
+**Additional TC in the Test Case Registry:**
+
+TC-025: **Pre-consolidation measurement.** Before scoping any legacy-table
+consolidation, produce for every table with an FK to the legacy table: row count,
+count with the legacy key populated, and count resolvable to the new key. Then
+count legacy rows with no counterpart in the new table. Only after that estimate
+effort. Additionally list functions reading the legacy table and classify each as
+legacy-only, both, or new-key-only — the legacy-only set is what Phase 2 breaks.
