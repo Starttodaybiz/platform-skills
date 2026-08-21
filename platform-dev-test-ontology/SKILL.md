@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Dev Test Ontology
 
-Last updated: Aug 20 2026 — v7: attorney-dashboard hardening. L40 (DROP/CREATE discards the L37 revoke — four trust RPCs became anon-executable) and L41 (GENERATED ALWAYS column + check_function_bodies=OFF left the entire Billing & Trust write surface throwing 428C9 on every call) locked. TC-019/020/021 added.
+Last updated: Aug 21 2026 — v8: corrected the Score_Card "Computed By" gotcha, which documented 'calculate_start_scores_v2' and was causing the empty-result bug it appeared to guard against (85 of 92 rows are v4). L42 (install-script side artifacts + delta bracket check) and L43 (cron.job_run_details — two compliance jobs at 0 successes for 62 days) locked. TC-022 adds fn_platform_static_health_check().
 
 ---
 
@@ -282,7 +282,19 @@ HR
     G_Compliance_item_status_id (not G_Statuses_id); Created + Last_modified TIMESTAMPTZ NOT NULL
   G_Departments: Departments_id (PK), Departments_name
   Entities: sos_entity_type (text, not Entity_type_id FK)
-  Score_Card: filter WHERE "Computed By" = 'calculate_start_scores_v2'
+  Score_Card: filter WHERE "Computed By" = 'calculate_start_scores_v4'
+    !! The long-documented 'calculate_start_scores_v2' here was WRONG and was
+       actively causing the bug it looked like a precaution against. Of 92
+       Score_Card rows, 85 are v4, 2 are v2, 5 are null, so the v2 filter
+       returns ZERO rows for every real tenant. get_hr_score_health followed
+       this instruction in nine predicates and served an empty Start Score
+       Health page to everyone; sync_scores_from_score_card was frozen the same
+       way. Corrected Aug 21 2026.
+       The nightly cron runs calculate_start_scores_v6, but v6 delegates the
+       calculation to v4 and then UPDATEs those rows in place WITHOUT changing
+       "Computed By" -- so rows stay tagged v4 and v4 is the correct literal.
+       Before trusting any version literal, check what is actually there:
+         SELECT "Computed By", count(*) FROM "Score_Card" GROUP BY 1; !!
   get_gamification_profile(): takes entity_id NOT org_id
   Organizations: PK is Organizations_id (NOT id) — caused stverify bug
     !! In plpgsql, bare "id" after querying "Organizations" resolves to the
@@ -1095,3 +1107,81 @@ call it against real data inside a `DO` block that `RAISE EXCEPTION`s at the
 end, smuggling the result out in the error message. The statement is atomic,
 so everything rolls back; verify the row is unchanged afterwards. This is how
 the two Balance fixes were confirmed rather than assumed.
+
+**Aug 21 2026 — install-script mechanics (one locked lesson):**
+
+L42. **Write side artifacts before any step that can fail, and check bracket
+     balance as a DELTA, not an absolute.**
+     Two independent install-script defects in one session.
+     (a) An installer wrote its commit message in a heredoc at the very end,
+     after `npm run build`. `npm` was not on the PATH of a non-interactive
+     shell, `set -e` exited, and the message file was never created — so the
+     follow-up script that expected it failed too. Anything a later step depends
+     on must be written before the first step that can fail.
+     (b) The locked "bracket balance sanity check" rejects every patch to
+     `AttorneyDashboard.jsx`: the pristine file already counts **-8** on parens
+     because of parens inside string and regex literals. An absolute
+     `count('(') == count(')')` check is invalid on any real JSX file. The
+     correct invariant is that the patch must not CHANGE the delta:
+     ```python
+     before = src_before.count(op) - src_before.count(cl)
+     after  = src_after.count(op)  - src_after.count(cl)
+     if before != after: fail()
+     ```
+     Also: a non-interactive shell does not read `.zshrc`, so an nvm-managed
+     node is invisible to a script even when `npm` works fine in the terminal.
+     Build steps should source nvm, probe homebrew/volta/fnm, and degrade with a
+     warning rather than exiting after the files are already patched.
+
+**Aug 21 2026 — the two sweeps (one locked lesson):**
+
+L43. **`cron.job_run_details` is authoritative and nobody reads it. Check it
+     before believing any scheduled job works.**
+     Two compliance jobs had never succeeded once:
+     * `compliance-enrich-work-packets` (*/30, active) — **2,975 runs, 2,975
+       failures, 0 successes** — called `fn_cron_enrich_compliance_items()`,
+       which never existed. The worker `fn_enrich_compliance_items(p_limit,
+       p_max_age_hours)` was fine; only the `fn_cron_*` wrapper was missing.
+     * `compliance-deadline-tracking` (0 */6, active) — **247 runs, 247
+       failures, 0 successes** — the `Platform_Alerts` INSERT named `alert_type`
+       (real column `signal_type`) and omitted `org_id` and `suite`, both NOT
+       NULL with no default.
+     Both broke on **2026-06-20**, 79 minutes apart, in one deployment. Neither
+     ran for 62 days. `compliance_item_readiness` sat at 260 rows with 3,279
+     items queued; `compliance_deadline_tracking` held 8,177 rows all stamped
+     2026-06-20. Live recompute showed **154 statutory filings overdue, 4
+     critical** — the compliance position nobody could see, on a compliance
+     product.
+     The transaction detail is the trap: the cron command is one statement, and
+     the failing INSERT came AFTER the function that does the real work, so the
+     raise rolled back the computation too. A cron that "only fails to alert"
+     may be discarding its entire run.
+     **Rule:** after registering or editing any cron, and on any session
+     touching scheduled work, run:
+     ```sql
+     SELECT j.jobname, count(*) FILTER (WHERE d.status='failed') AS failed,
+            count(*) FILTER (WHERE d.status='succeeded') AS ok
+     FROM cron.job j JOIN cron.job_run_details d ON d.jobid=j.jobid
+     GROUP BY j.jobname HAVING count(*) FILTER (WHERE d.status='succeeded') = 0;
+     ```
+     Any row returned is a job that has never worked. Note a job with NO run
+     history at all will not appear — check `cron.job` LEFT JOIN separately, and
+     remember annual schedules legitimately never appear.
+     Companion lesson: alert INSERTs belong in their own BEGIN/EXCEPTION block
+     so a reporting failure cannot roll back the work, and every recurring alert
+     needs a `dedup_key` with `ON CONFLICT DO NOTHING` — a 6-hourly job without
+     one raises four duplicates a day.
+
+**Additional TC in the Test Case Registry:**
+
+TC-022: **Platform static health check.** `SELECT public.fn_platform_static_health_check();`
+Returns dead_functions (plpgsql_check errors), dead_triggers (checked per
+attached relation, with `blocks_writes` and `likely_false_positive` flags),
+generated_col_writes (428C9 risks) and cron_health (never-succeeded and
+recently-failing jobs). Run at session start for any DB work and after any
+migration. Baseline at 2026-08-21 close: 1 generated_col_write
+(`apply_trust_to_invoice`, left failing closed on purpose), 3 dead_triggers of
+which 2 are known false positives from REFERENCING transition tables, and
+`fn_c2c_evidence_from_kyc` which needs its intended join specified before it can
+be fixed. Requires the `plpgsql_check` extension, installed in `extensions`
+(deliberately not `public`, to avoid an extension_in_public advisor finding).

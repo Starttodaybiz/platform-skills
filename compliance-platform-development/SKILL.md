@@ -572,7 +572,12 @@ Entities.sos_entity_type (text, not FK)
 Financial_Statements — cf_operating/investing/financing only on 'Cash Flow' rows
 Financial_Statements — DEMO/PROD schema drift possible; verify parity
 Organizations.Organizations_id (PK, not id)
-Score_Card — filter WHERE "Computed By" = 'calculate_start_scores_v2'
+Score_Card — filter WHERE "Computed By" = 'calculate_start_scores_v4'
+  (the previously documented 'v2' was wrong: 85 of 92 rows are v4, and the v2
+  filter returns zero rows for every tenant. See the Column Name Gotchas entry
+  in platform-dev-test-ontology. Verify with
+  `SELECT "Computed By", count(*) FROM "Score_Card" GROUP BY 1;` before trusting
+  any version literal.)
 get_gamification_profile() takes entity_id NOT org_id
 ```
 
