@@ -6,7 +6,7 @@ description: >-
 
 # Start Today™ Platform Dev Test Ontology
 
-Last updated: Jul 26 2026 — v6: Phase 2 shipped in full (Sprints 2.1-2.6) — CFO Cash card, Plaid activation, Recent Transactions, Cash Basis Summary, Debt Workbench redesign, bank /banking route retirement. L37 (SECURITY DEFINER revoke) + L38 (schema tolerance) + L39 (Start_Score DEMO/PROD divergence — L38 recurrence) locked. `@start-today/platform-docusign` v0.1.0 published.
+Last updated: Aug 20 2026 — v7: attorney-dashboard hardening. L40 (DROP/CREATE discards the L37 revoke — four trust RPCs became anon-executable) and L41 (GENERATED ALWAYS column + check_function_bodies=OFF left the entire Billing & Trust write surface throwing 428C9 on every call) locked. TC-019/020/021 added.
 
 ---
 
@@ -963,3 +963,135 @@ L39. **L38 confirmed on `Start_Score`. All legacy quoted-name tables must
      3. Test on DEMO first EVERY time. Sprint 2.1 rediscovered this
         rule for a fourth time — the L23-locked "DEMO-first validation"
         discipline must not slip.
+
+**Aug 20 2026 — attorney-dashboard trust RPC grant regression (one locked lesson):**
+
+L40. **DROP FUNCTION + CREATE FUNCTION silently restores the default PUBLIC
+     EXECUTE grant. L37's revoke is not sticky across a signature change.**
+     L37 established the canonical revoke for *new* SECURITY DEFINER RPCs.
+     What it did not say, and what cost a live hole in trust accounting:
+     **changing an existing function's signature means DROP + CREATE, and the
+     new function is a new object with default privileges.** Every revoke
+     previously applied to the old signature is discarded with the old oid.
+     (`CREATE OR REPLACE` reuses the oid and *does* preserve grants — the
+     hazard is specific to a signature change.)
+
+     Case: commit `b99a4f2` (legal, Aug 20) added `p_user_email` as the first
+     argument to `post_trust_deposit`, `post_trust_disbursement`,
+     `apply_invoice_to_trust` and `generate_invoice_from_wip` to close a
+     cross-firm authorisation gap, dropping the unscoped signatures so they
+     could not be called around the new guard. Correct fix, correctly reasoned.
+     But the recreate carried no revoke, so all four came back granted to
+     PUBLIC — and were then the **only** four attorney RPCs in the schema that
+     `anon` could execute. Every sibling (`get_firm_context`, `create_matter`,
+     `update_matter_details`, `set_worklist_item_done`, 76 others) was `false`.
+
+     Why that was worse than the bug it fixed: the attorney app's entire
+     authorisation model is `/api/rpc/[fn]` forcing `p_user_email` from the
+     verified session (commit `2ba6f67`). The RPCs themselves authorise the
+     *claimed* email — `_caller_firm_for_matter(email, work_item_id)` has no
+     session binding. Anon EXECUTE therefore routes around the proxy entirely:
+     the public anon key plus a discoverable firm address is a write path into
+     the IOLTA ledger. The original bug needed an authenticated session and a
+     second firm that does not exist yet; this one needed neither.
+
+     **Rule:** any migration that changes an RPC's signature must re-apply the
+     full L37 block in the same migration as the CREATE, not just on first
+     creation:
+     ```sql
+     REVOKE EXECUTE ON FUNCTION public.my_rpc(<new arg types>)
+       FROM anon, authenticated, PUBLIC;
+     GRANT  EXECUTE ON FUNCTION public.my_rpc(<new arg types>) TO service_role;
+     ```
+     **Verification (do not skip — the advisor is the only thing that catches
+     this, and it is one WARN among ~1900):**
+     ```sql
+     SELECT proname,
+            has_function_privilege('anon', oid, 'EXECUTE') AS anon,
+            has_function_privilege('authenticated', oid, 'EXECUTE') AS authed
+     FROM pg_proc
+     WHERE pronamespace='public'::regnamespace AND proname IN (...);
+     ```
+     Both must be `false`. Fixed Aug 20 via
+     `legal_trust_rpcs_revoke_anon_authenticated_execute`; advisor count
+     1946 → 1938, delta −8 (4 anon + 4 authenticated), all other categories +0.
+
+     Corollary: `get_advisors` returns ~1946 findings on PROD, of which ~1272
+     are the accepted `*_security_definer_function_executable` backlog. A
+     4-function regression is a 0.2% movement in that number. **Do not baseline
+     on the total.** Baseline per-category, and for any function touching
+     money, identity or client data assert the privilege directly.
+
+**Aug 20 2026 — Billing & Trust write surface dead on arrival (one locked lesson):**
+
+L41. **`check_function_bodies = OFF` plus a GENERATED ALWAYS column is a
+     silent-500 factory. Grep for assignments to generated columns after any
+     migration that adds one.**
+     `Matter_Invoices."Balance"` is `GENERATED ALWAYS AS ("Total" - "Paid")`.
+     Three RPCs assign to it. Postgres rejects that with `428C9 column
+     "Balance" can only be updated to DEFAULT` — but only at *execution*.
+     With `check_function_bodies = OFF` all three created cleanly, deployed
+     cleanly, and threw on every single call. None had an EXCEPTION handler,
+     so they surfaced as raw 500s rather than `{ok:false}`.
+
+     Affected: `apply_invoice_to_trust`, `record_invoice_payment`,
+     `apply_trust_to_invoice`. That is the entire Billing & Trust *write*
+     surface. It had never worked. This compounds the known read-side problem
+     (`get_matter_billing` querying legacy `Matter_id` with a `work_item_id`):
+     the tab was empty on read *and* broken on write, which is why neither
+     symptom ever isolated the other.
+
+     Worth noting how close this came to being missed: `apply_invoice_to_trust`
+     was hardened the same night for a cross-firm authorisation gap. The
+     authorisation fix was correct and verified. Nobody called the function
+     afterwards, so nobody learned it could not run at all.
+
+     **Rule:** after any migration that adds a generated column, sweep every
+     function body for assignments to it:
+     ```sql
+     WITH gen AS (SELECT table_name, column_name FROM information_schema.columns
+                  WHERE table_schema='public' AND is_generated='ALWAYS')
+     SELECT p.proname, g.table_name||'."'||g.column_name||'"'
+     FROM pg_proc p JOIN gen g
+       ON p.prosrc ~* ('"'||g.column_name||'"[[:space:]]*=')
+      AND p.prosrc ILIKE '%UPDATE%' AND p.prosrc ILIKE ('%'||g.table_name||'%')
+     WHERE p.pronamespace='public'::regnamespace;
+     ```
+     **Removing the assignment is normally the entire fix** — the generated
+     expression already computes the intended value. Check the clamp: a
+     hand-written `GREATEST(x - y, 0)` differs from a bare `x - y` only in the
+     overflow case, and usually the unclamped value is the more truthful one
+     (it shows the credit).
+
+     **Sequencing trap:** do not fix the crash on a function whose
+     authorisation is also broken. `apply_trust_to_invoice` debits
+     `Work_Items.trust_balance` with no firm predicate; it is only harmless
+     today *because* the 428C9 aborts the statement first. Repairing the crash
+     alone would convert a function that fails closed into a live cross-firm
+     write. It was deliberately left erroring pending a drop, since
+     `apply_invoice_to_trust` supersedes it.
+
+**Additional TCs in the Test Case Registry:**
+
+TC-019: **Post-signature-change grant assertion.** After any migration that
+drops and recreates an RPC, assert `has_function_privilege('anon', oid,
+'EXECUTE') = false` and the same for `authenticated`, for every function the
+migration touched, in a statement separate from the migration itself. Extend
+to a surface sweep where the app has a hardened baseline — e.g. for the
+attorney app, every SECURITY DEFINER function whose body references
+`Firm_Members`, `"Work_Items"`, `Matter_Invoices`, `Matter_Trust_Transactions`
+or `Work_SOP_Instances` should be anon-unreachable. As of Aug 20 that sweep is
+80 locked down / 1 reachable (`request_compliance_specialist`, pre-existing,
+client-portal intake — triage separately, not a regression from this session).
+
+TC-020: **Generated-column assignment sweep.** Run the L41 query after any
+migration adding a generated column, and as a standing check. Zero rows
+expected. Pairs with TC-019.
+
+TC-021: **Exercise-the-write-path probe.** A function that returns a refusal
+(`not_a_firm_member`, `invoice_not_found`) has not been proven to work — the
+refusal returns before the UPDATE. To prove a write RPC actually executes,
+call it against real data inside a `DO` block that `RAISE EXCEPTION`s at the
+end, smuggling the result out in the error message. The statement is atomic,
+so everything rolls back; verify the row is unchanged afterwards. This is how
+the two Balance fixes were confirmed rather than assumed.
