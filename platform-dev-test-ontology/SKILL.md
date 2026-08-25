@@ -1395,3 +1395,159 @@ count with the legacy key populated, and count resolvable to the new key. Then
 count legacy rows with no counterpart in the new table. Only after that estimate
 effort. Additionally list functions reading the legacy table and classify each as
 legacy-only, both, or new-key-only — the legacy-only set is what Phase 2 breaks.
+
+---
+
+## Locked Lessons — 2026-08-24 session
+
+### L51 — An error message that asserts a cause will send you the wrong way
+`fn_carl_extract_document` reported *"source file not retrievable from storage
+(HTTP 400); the document record exists but the file binary is missing —
+re-upload the file"*. The binary was present, correctly sized, and fetchable. The
+real cause was a signature invalidated by URL normalisation.
+
+That sentence cost four wrong theories and an hour. **Error text should report
+what was observed — status, endpoint, response — and stop.** A diagnosis embedded
+in an error is a guess that outlives the person who made it.
+
+Corollary: when you write the handler, resist explaining. `storage returned HTTP
+400 for this object; check bucket, path and access mode` is more useful than any
+theory about why.
+
+### L52 — Read the response body on the FIRST failure, not the third
+The same bug produced, in order: `400 InvalidKey`, then curl *"Malformed input to
+a URL function"*, then `400 InvalidSignature`, then Anthropic's *"Unable to
+download the file"*. Four distinct causes. Each was treated as a continuation of
+the last, so each fix addressed the previous symptom.
+
+**A new error message is new evidence, not a variant of the old one.** Fetch the
+body before forming a hypothesis.
+
+### L53 — A Supabase signed URL must be returned verbatim
+The token signs the **exact path string** the Storage API produced, which is
+partially encoded: `&` comes back as `%26`, spaces come back raw. Therefore:
+- encoding the whole returned URL → `%2526` → `400 InvalidKey`
+- leaving it alone → raw space → curl refuses to send it
+- encoding only the space → `400 InvalidSignature`
+
+There is no correct normalisation. Return it verbatim, or do not use signed URLs.
+For server-to-server work use `/storage/v1/object/authenticated/<bucket>/<path>`
+with a bearer token — no signature, no normalisation problem. Verified: the
+authenticated endpoint returns 200 for paths that defeat signing entirely.
+
+### L54 — Never do N network calls before responding in a serverless function
+The classification queue endpoint signed a URL for all 86 rows before returning.
+86 parallel storage round-trips exceeded the function timeout, the client's
+`safeFetch` returned null, and the feature silently did nothing — while the route
+answered 403 to unauthenticated probes and looked healthy.
+
+**Sign, fetch and enrich on demand, one item at a time.** The list call went from
+timing out to 11 ms. A short-lived URL minted at page load has also already spent
+part of its life before anyone clicks it.
+
+### L55 — A status column is a claim about the past
+`Documents.storage_present` was true for 719 rows and last verified **2026-06-26**
+— two months stale. It was treated as current fact in a summary given to the
+user. It happened to still be accurate, which is luck, not method.
+
+**Any boolean that records the result of a check needs its `*_verified_at`
+consulted in the same query.** If the timestamp is old, the boolean is a memory.
+
+### L56 — Deployment success is not deploy success
+Four commits pushed cleanly to compliance-User. All four deployments were
+`ERROR`. `npm install` had failed since 22 July on
+`ssh://git@github.com/Starttodaybiz/platform-auth.git` — Vercel build machines
+have no SSH key for a private repo — and production kept serving the last good
+build from before the platform-auth migration.
+
+Local assertions passed. `git push` succeeded. The site worked. **A month of
+commits were invisible.**
+
+Check `state` on the deployment, not the exit code of the push. A private git
+dependency over SSH will never install on Vercel; use an install-command override:
+```
+git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "ssh://git@github.com/" && npm install
+```
+
+### L57 — Names are unreliable guides to what things are (3rd and 4th recurrence)
+- `compliance-User` was judged from `st_staff_tab_permissions` (analytics, okrs,
+  revenue, pipeline) — a table belonging to a **different application**. Its real
+  routes are evidence-review, control-queue, gap-alerts, formation-queue: a
+  compliance workstation, exactly as its name says.
+- `Entity_Ownership_Interests` (**0 rows**) sits beside `Ownership_Interests`
+  (**120 rows**). `get_legal_structure` reads the empty one, which is why entities
+  visibly connected on the org map return `role: standalone`.
+- Earlier instances: `Matter_Assignments`/`Work_Members`,
+  `conflict_resolution_rules` (data merges, not legal conflicts).
+
+**Confirm what a table belongs to before inferring an application's purpose from
+it.** One query on the repo's own routes settles it.
+
+### L58 — When wiring actions onto a list, check the list's bounds
+Preview/Download/Approve were wired onto rows from `/api/documents`, which returns
+the **200 most recent by date**. The proposals spanned four months, so **37 of 86**
+had a row to attach to and 49 were unreachable. The queue said 86.
+
+**A join between a queue and a paged list silently drops whatever falls outside
+the page.** Count the intersection before shipping.
+
+### L59 — Legal content must be researched live, every time
+CTA beneficial-ownership reporting was **permanently repealed for US entities on
+2026-08-14** by FinCEN final rule — ten days before the session. Memory said it
+was a live obligation. The platform held **463 open compliance items, 15 rules and
+68 assertions** asserting it.
+
+For a compliance product this is the worst failure class: telling a client to make
+a filing they are exempt from. `compliance_rules` had `last_verified_date`,
+`statute_effective_date` and `currency_status` columns — **171 of 1,110 populated,
+most recent verification 2026-06-29, zero tied to a law change.**
+
+Never state a legal requirement from memory. Search, cite, date it.
+
+### L60 — Count the population before estimating the work
+"413 documents need classification" was really **45**. The rest: 205 rows with no
+bytes, 166 non-documents (logos, avatars, property photos, `theme1.xml` and other
+Office-archive internals), and duplicates.
+
+A queue that counts company logos as unclassified legal documents teaches people
+to ignore it — which is how 140 proposals at 0.9 confidence sat undecided.
+`fn_document_is_classifiable()` now draws that line once, in the database, so
+every surface reads the same number.
+
+Related: an overstated duplication figure earlier in the day (3× the real number)
+came from grouping on the wrong key. **State the measurement, not the impression.**
+
+### L61 — A queue with no owner is not a queue
+Every stalled item found was stalled the same way: complete machinery, populated
+data, and no surface where the person with authority would see it.
+- 140 classification proposals, real confidence, undecided for months
+- 379 assertions observed correctly, none carrying a rule
+- 12 chain-of-title certifications reachable only from the client app
+- 1,016 rules and assertions awaiting an attorney with no queue view
+
+`get_work_queues(email, app)` now routes work by **authority**: attorney-only
+queues are hidden from staff rather than shown as counts they cannot action.
+
+**Placement principle: work goes where the authority to do it lives.** If it needs
+a licence it is attorney; if it is operational correctness it is compliance;
+client-facing apps surface state and requests, never firm work queues.
+
+---
+
+## Test Cases — 2026-08-24
+
+| TC | Name | Expected |
+|----|------|----------|
+| TC-026 | Signed URL verbatim | `fn_carl_sign_url` output is byte-identical to the API's `signedURL` after the host prefix. Any re-encoding → `400 InvalidSignature`. |
+| TC-027 | Queue endpoint latency | `get_classification_review_queue(100)` returns in <100 ms and the route performs **zero** storage calls. Signing happens only via `?sign=<id>`. |
+| TC-028 | Document population | `fn_document_is_classifiable()` excludes asset buckets, archive internals, duplicates and rows with no bytes. Every surface reporting "unclassified" uses it. |
+| TC-029 | Deploy actually deployed | After any push, assert the newest deployment for the project has `state: READY`. A clean `git push` proves nothing. |
+
+## Rule currency — new invariant
+
+`compliance_rules.currency_status` now permits `superseded` and `pending_review`,
+and `compliance_law_changes` records dated, cited changes in law with a source URL
+and retrieval timestamp. **A rule asserting repealed law must never read
+`current`.** Rules whose law is in question are excluded from provisional
+approval — the question there is not whether counsel has reviewed it, but whether
+it is still the law.
