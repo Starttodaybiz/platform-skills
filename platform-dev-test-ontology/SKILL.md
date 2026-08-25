@@ -1551,3 +1551,155 @@ and retrieval timestamp. **A rule asserting repealed law must never read
 `current`.** Rules whose law is in question are excluded from provisional
 approval — the question there is not whether counsel has reviewed it, but whether
 it is still the law.
+
+---
+
+## Locked Lessons — 2026-08-24, compliance model
+
+### L62 — Search for the thing before building the thing
+Four times in one session I built alongside something that already existed:
+
+| Built | Already there |
+|---|---|
+| `G_Document_Extraction_Prompts` | `carl_extraction_profiles` — 34 profiles, correct insurance one |
+| a recovery parser (3 of 8 right) | `_insurance_extractions` — all 8, with limits and deductibles |
+| `Contract_Insurance_Requirements` | `carl_contract_obligations` — 758 extracted obligations |
+| `carl-extract-binary` profile logic | `fn_carl_profile_for` / `fn_carl_extract_document` |
+
+Every one was found by a query I could have run first. The platform's defining
+problem is **built, populated, never surfaced** — and diagnosing that while adding
+to it is the specific trap.
+
+**Before creating a table, a prompt catalogue or an extractor, query
+`information_schema.tables` and `pg_proc` for the concept.** One search costs
+seconds; a parallel system costs a migration to unwind and leaves two sources of
+truth in the meantime.
+
+### L63 — ON CONFLICT does not constrain NULL columns
+`UNIQUE (entity_id, requirement_slug, period_year, jurisdiction)` where the last two
+are nullable **never fires**, because `NULL <> NULL` in Postgres. Three generation
+runs produced three copies of every row: 12,616 where the truth was 5,124.
+
+A client's compliance obligations were overstated **3x**, which is exactly the false
+authority the whole workstream exists to prevent.
+
+Fix: `COALESCE` sentinels in a unique *expression* index, and target that
+expression in `ON CONFLICT`:
+```sql
+CREATE UNIQUE INDEX ... (entity_id, requirement_slug,
+  COALESCE(period_year, -1), COALESCE(jurisdiction, '~'));
+-- then: ON CONFLICT (entity_id, requirement_slug,
+--   COALESCE(period_year,-1), COALESCE(jurisdiction,'~')) DO NOTHING
+```
+Then **verify idempotency by running twice and asserting the count is unchanged.**
+
+### L64 — A match test and its ambiguity check must be equally strict
+Attaching documents by filename: the match used
+`position(full_name in filename)`, and the "is this ambiguous" count used the
+*same* strict test. `10XHealth IF1 L.P.` appears in filenames as
+`10XHealth IF1 L_P_`, so the strict test found **one** entity, the check agreed it
+was unambiguous, and five two-party agreements were attached to a single party with
+the counterparty silently dropped.
+
+**If the match is fuzzy, the ambiguity check must be at least as fuzzy**, or it
+passes on a technicality. Related: a document naming two parties is not ambiguous —
+it belongs to both. `Documents.Entity_id` being singular is a modelling limit, not a
+disambiguation problem.
+
+### L65 — A fix applied to the data is not a fix
+`carl-extract-binary` wrote its JSON into `embed_text` instead of `extraction_json`.
+The data was corrected; the edge function was not. The next batch of eight documents
+reproduced the bug exactly.
+
+**When correcting bad data, fix the producer in the same session or the correction
+is a cleanup, not a repair.** If the producer cannot be fixed immediately, hold the
+queue rather than let it generate more of the same.
+
+### L66 — Absence of findings is not absence of risk
+The single most important reporting rule in this domain. Every count needs its
+unexamined counterpart stated first:
+- 7 of 11 pillars generate **no assertions** — so their requirements are assessed on
+  document presence only
+- 37 of 121 entities have **no formation date** — so no dated obligations generate
+  for them at all
+- 17 leases on record, **0 read** for insurance clauses — so no breach can be
+  detected
+- A requirement with **no source document** is inadmissible: telling a client they
+  breach a clause nobody has read is worse than silence
+
+A report showing three green pillars and omitting eight unexamined ones reads as
+"no gaps found" when the truth is "not looked at", and that is the more dangerous
+error.
+
+### L67 — Recurrence has more dimensions than "annual"
+A corporate record is not a checklist. 41 of 139 requirements described recurring
+obligations as single snapshots — `annual_report_current` and
+`annual_report_prior_year` were the model's way of saying "this year and last",
+while one entity holds 13 annual reports and the oldest was formed in 1921.
+
+Dimensions actually needed: `annual`, `quarterly`, `per_jurisdiction`,
+`annual_per_jurisdiction`, `quarterly_per_jurisdiction`, `per_person`,
+`per_property`, `annual_per_property`, `semiannual_per_property`,
+`per_lease_document`, `per_record`.
+
+Two that are easy to miss: **per_person** (a "Sample I-9 Forms" requirement is not a
+corporate record — diligence asks for one per employee) and **semiannual_per_property**
+(Illinois bills property tax in two instalments, which `Property_Taxes` already
+modelled).
+
+### L68 — The horizon comes from retention law, not from a number
+How far back a record must reach is a legal fact per document type, not a policy
+choice. A 2004 entity owes **16** quarterly Form 941s under the IRS 4-year rule
+(26 CFR 31.6001-1), not 88 running to formation — but it owes **every** annual
+report since 2004, because a gap in the standing series cannot be aged out.
+
+`G_Record_Retention_Rules` carries authority, citation, source URL, verification
+date and `review_due` per rule. Where a period is practice rather than statute —
+formation documents kept permanently — the row says so instead of inventing a
+citation.
+
+### L69 — Never count an obligation that is not owed
+Applicability was checked for singular requirements and skipped in the recurrence
+loop, so a holding company with no employees generated quarterly SUTA, withholding
+and 941 filings. `state_tax.sales_use_returns` was worse: `required` with **no
+applicability condition at all**, asserting quarterly sales-tax returns against
+every entity including pure holding companies — 27 fabricated obligations for one.
+
+**A fabricated obligation is worse than a missing one.** A missing requirement is a
+gap someone finds and closes; an invented failure appears in a client report as
+real, and every number built on it — score, gap count, completeness percentage — is
+wrong in a direction nobody checks.
+
+Where liability turns on a fact the platform does not hold, gate on an observable
+proxy and say so: sales-tax returns apply only where a sales-tax permit is on
+record, because registration is the observable evidence the entity took on the
+obligation.
+
+---
+
+## Evidence tiers — the vocabulary to use
+
+Already present in `readiness_assertions` and now on expected instances. The
+distinction that matters most is **unsubstantiated**: the platform holds a RECORD of
+the thing without a document proving it.
+
+| Tier | Means |
+|---|---|
+| `verified` | Document held, hashed, attorney-accepted |
+| `asserted` | Document held and accepted, not attorney-reviewed. **Integration-sourced evidence lands here** — better provenance than a client email, but no attorney has looked |
+| `under_review` | Submitted, not decided |
+| `unsubstantiated` | A record exists (an `Insurance_policies` row, a `Leases` row) with no document. **Known, not proven** |
+| `not_required` | Does not apply to this entity |
+
+45 insurance policies and 20 leases exist as rows with **zero documents behind
+them**. Reporting those as satisfied would repeat the 454-ghost-document failure.
+
+## Test Cases — compliance model
+
+| TC | Name | Expected |
+|----|------|----------|
+| TC-030 | Generation is idempotent | Running `generate_expected_evidence` twice adds **zero** rows. Assert the count, do not trust `ON CONFLICT`. |
+| TC-031 | No fabricated obligations | An entity with no employees generates **zero** quarterly payroll instances; a holding company with no sales permit generates **zero** sales-tax returns. |
+| TC-032 | Retention bounds the horizon | A 2004 entity has ~16 quarterly 941 instances (4-year rule) and ~23 annual report instances (permanent series). |
+| TC-033 | Coverage is stated | Every gap report states pillars examined vs not examined, and contracts read vs unread, before any finding. |
+| TC-034 | Profile routing | An operating agreement routes to `operating_agreement`, an insurance policy to `insurance` — not to `contract_insurance_clause` or `policy_handbook`. |
