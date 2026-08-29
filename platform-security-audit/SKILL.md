@@ -18,6 +18,52 @@ description: >
 
 # Platform Security Audit — Start Today™ (v2)
 
+## BEFORE YOU BUILD — read what the platform already knows
+
+The database records what exists, what has already gone wrong, and why things
+were built the way they are. **None of it is consulted unless you ask.** Four
+queries, under a minute, and they routinely prevent rebuilding something that
+exists or repeating a failure already solved.
+
+```sql
+-- Which tables implement a concept? (140 mapped concepts)
+SELECT * FROM where_does_this_live('registered agent');
+
+-- Has this gone wrong before? Each row carries a PREVENTION RULE.
+SELECT title, symptom, prevention_rule, fix_pattern
+FROM code_landmines_registry WHERE embed_text ILIKE '%<topic>%';
+
+-- Why is it built this way? Includes alternatives REJECTED and why.
+SELECT title, decision_summary, alternatives_considered, tradeoffs_accepted
+FROM ai_decisions_log WHERE embed_text ILIKE '%<topic>%' ORDER BY decided_at DESC;
+
+-- Has it been discussed? 201 past sessions, NEWEST FIRST — a later session
+-- often reverses an earlier conclusion.
+SELECT * FROM search_session_history('<topic>', 10);
+```
+
+**Unconfirmed rows in the table map are LEADS, not facts** — proposed by name
+matching. Verify, then set `confirmed = true` with a note; that is how the map
+improves.
+
+**Two habits worth more than any single lookup.** Never trust
+`pg_stat_user_tables.n_live_tup` — it is an ESTIMATE and reported ZERO for four
+populated tables in one session, nearly causing a rebuild of what already
+existed; use `count(*)`. And verify the PATH, not the artefact — a green build,
+a passing `node --check` and a correct SQL result do not execute the component or
+the route.
+
+**When you finish**, record what you learned or the next session repeats it: a
+new failure mode into `code_landmines_registry` with a `prevention_rule`, an
+architectural choice into `ai_decisions_log` with `alternatives_considered`, a
+confirmed table mapping into `ontology_cluster_tables`. Both registries embed
+hourly and become semantically searchable on their own.
+
+Full detail: the `compliance-platform-development` skill, STEP ZERO.
+
+---
+
+
 ## What v2 adds over v1
 
 - **`security-remediation-state.json`** written alongside the docx. Machine-
