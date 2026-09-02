@@ -663,3 +663,16 @@ Categories accepted at PROD as of Jul 2026:
 - `platform-security-remediate` — security finding remediation playbook
 - `platform-responsive-design` — responsive design recipes and useCompact viewport
 - `mfa-implementation` — TOTP MFA integration pattern
+
+## Readiness Report (client.starttoday.biz) — build conventions (2026-09-02)
+
+- **Bundle layout is locked** (v24 shape): `ReadinessBriefing.jsx`, `api/<rpc>/route.js` for every `/api/rpc/*` route, `api_export/route.js`, `api_readback/route.js`, the three ClientShell `.pl` patches, `install_readiness_briefing_vNN.sh`. Installer copies everything idempotently, commits as `Starttodaybiz`, pushes `main`. Jason runs: `cd ~/Downloads && unzip -q readiness-briefing-vNN.zip && cd readiness-briefing-vNN && bash install_readiness_briefing_vNN.sh`.
+- **Every submission calls `refresh()`**, which re-reads via `client_readiness_briefing` (read-only) and keeps `briefing_number`, `template_version`, `sha256`, `issued_at` from the first load. Never call the `_issue` RPC for a refresh.
+- **Waiting states use `<StMark>` / `<Busy>`** (the Start Today mark at small scale, same strokes and timing as the portfolio loader). No `…`, no "Working…".
+- **Uploads:** `uploadAndRead()` — client-side validation (type, empty, 10 MB) with inline red lines, `/api/verify-pillar-upload`, `attach_document_to_item` with `item_id`/`document_id` (not `p_*`), then `/api/document-readback`. Multi-file, one line per file. Buttons never disappear ("Upload another").
+- **Read-back doctrine:** every upload is kept and ingested under what it is (`fn_write_document_context`); the verdict only says whether it answered the ask. Match + annual report → filing record → item closes; evidence submitted against its instance, not closed (Michael). Year mismatch → `unsure`, nothing closes.
+- **Home state:** `fn_entity_home_state` (trust governing law → SoS → domestic registration → single non-foreign AR state → formation doc). Ledger marks foreign filings with F.
+- **Send-us counts are documents**, headers show companies in the middle column. Audit checks both.
+- **Corporate book:** `client_corporate_book(entity)`; chapter = `G_Document_Types.corp_book_chapter`; plain types (Articles of Organization, Operating Agreement, Bylaws…) must carry a chapter or the chapter reads "not applicable".
+- **Retention on the client surface only when `G_Record_Retention_Rules.currency_status='approved'`.**
+- **DEMO has none of the readiness objects.** Readiness routes are PROD-only until the port.

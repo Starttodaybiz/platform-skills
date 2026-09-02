@@ -1749,3 +1749,33 @@ them**. Reporting those as satisfied would repeat the 454-ghost-document failure
 | TC-032 | Retention bounds the horizon | A 2004 entity has ~16 quarterly 941 instances (4-year rule) and ~23 annual report instances (permanent series). |
 | TC-033 | Coverage is stated | Every gap report states pillars examined vs not examined, and contracts read vs unread, before any finding. |
 | TC-034 | Profile routing | An operating agreement routes to `operating_agreement`, an insurance policy to `insurance` — not to `contract_insurance_clause` or `policy_handbook`. |
+
+## Readiness Report — locked lessons L37–L44 (2026-09-02)
+
+| # | Lesson | Evidence |
+|---|---|---|
+| L37 | **Read the rows before setting `derive_fn`.** `fn_item_kind` returns `derived` for any item matching a `G_Ask_Governance` regex once `derive_fn` is set. Unanchored `ein` matched 86 Boeing airworthiness alerts. Regexes must be `\y`-anchored and carry an ask verb. | `DERIVE_FN_ON_UNANCHORED_ASK_REGEX_HIDES_REAL_ITEMS` |
+| L38 | **`(ST)` is Start Today, never a state.** Any state code lifted from free text must resolve in `G_Jurisdictions_Reference.Abbrev`. | `ASK_TEXT_ST_SUFFIX_PARSED_AS_STATE_CODE` |
+| L39 | **Every caller of `calculate_start_scores_v*` runs both syncs.** Score_Card is the source; Entity_Score_Pillars and gamification are synced copies. Compare `max(Computed At)` vs `max(computed_at)` before touching the scorer. | `RESCORE_DRAIN_WROTE_SCORE_CARD_NOT_PILLARS` |
+| L40 | **A Documents insert does not queue extraction.** `trg_documents_enqueue_carl` is contract-only and needs `embed_text`. Ingest paths call `fn_carl_enqueue_extraction` themselves. Check `carl_extraction_jobs`, not `Extraction Status`. | `DOCUMENTS_ENQUEUE_TRIGGER_IS_CONTRACT_ONLY` |
+| L41 | **Hot-path lookups need an index on the entity column.** Documents, Compliance_Items, Annual_Report_Filings, Entity_Registrations had none; per-ask functions seq-scanned. | `NO_ENTITY_INDEX_ON_DOCUMENTS_AND_ITEMS` |
+| L42 | **A boolean "enriched" flag is a claim, not evidence.** `attom_enriched=true` sat on rows whose enrichment had failed with `ATTOM_API_KEY not configured`. Read the detail rows. | `ATTOM_ENRICHED_FLAG_TRUE_WITH_FAILED_ENRICHMENT` |
+| L43 | **`client_readiness_briefing_issue` mints a report number every call.** Refresh with `client_readiness_briefing` (read-only) and keep the issued number from the first load. | v29 |
+| L44 | **Counts in company-kind rows are not document counts.** 248 rows hid 565 open asks; uploads that satisfied asks never moved the number. Client-facing totals count documents (`to_send_docs`); audit checks `send_us_documents` and `sentence_documents`. | v29.3 |
+
+### Schema facts learned (2026-09-02)
+- `Annual_Report_Filings.Receipt_proof` → `storage.objects(id)`, not Documents. `Prepared_by_id` → `Users.User_id`. NOT NULL: `Series (Reported)`, `Data As-Of Date (Reported)`, `Juridiction_id` (sic), `Status_id`.
+- `Trust_Profiles` had no id link to Entities (Airtable text); `Entity_id uuid` added 2026-09-02.
+- `Entities` has no formation-state column beyond `sos_source_state` (NULL on 9/28 Provenzano entities); use `fn_entity_home_state`.
+- `G_Record_Retention_Rules` (17 rules, all `pending_review`); `G_Pillar_Document_Requirements.retention_rule_key` maps requirement → rule.
+- `expected_evidence_instances` (22k rows) is the evidence engine; `submit_client_document` / `verify_document_against_instance` / `close_expected_instance` (person closes) / `propose_held_document_matches` → `Document_Obligation_Proposals`.
+- `min(uuid)` does not exist: use `(array_agg(x))[1]`.
+
+### New test cases
+| ID | Check | Expected |
+|---|---|---|
+| TC-019 | Index check on any new per-item lookup | `pg_indexes` has an entry on the entity column before the function ships |
+| TC-020 | `fn_readiness_audit_all()` | 0 failures, < 30s |
+| TC-021 | Read-back on an annual report against a card | verdict match, `Annual_Report_Filings` row with receipt proof, item closed, submission against the (year, state) instance, retention determined |
+| TC-022 | Read-back year mismatch | verdict `unsure`, nothing closes, summary names both years |
+| TC-023 | `fn_sweep_duplicate_documents(org, true)` | keeper is the attached/read/earliest copy; duplicates excluded not deleted |
